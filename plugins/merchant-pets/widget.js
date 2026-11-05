@@ -2,11 +2,12 @@
 // while aligning (the shop's X and Exit too, as boxes), a press drags it. Only
 // the label's own box takes the mouse, so the card above stays clickable.
 //
-// A card while aligning: its window covers the game, the box drawn in it at
-// `rect`, moved by its middle and sized from any edge or corner; its tick and
-// eye the same, in it. Sizing the card keeps them where they are on screen.
-// Let go, the plugin hears it (and does the same to every card). The window
-// itself never moves then, so the pointer stays on it however fast it goes.
+// A card while aligning: its window is the box (drawn at `rect`) and a margin
+// round it. Its middle drags the window; an edge or corner sizes the box in
+// it (the pointer stays on the window); its tick and eye are dragged and
+// sized in it the same. Sizing the card keeps them where they are on screen.
+// Let go, the plugin hears it, does the same to every card and brings the
+// window round the box again.
 const box = document.querySelector(".label");
 let rect = null; // the card's box: left, top, width, height (CSS px of the window)
 let marks = null; // its tick and eye: left, top, right, bottom as fractions of it
@@ -81,11 +82,13 @@ box.addEventListener("mousedown", (e) => {
   if (!box.classList.contains("align")) return a2.widget.post({ dismiss: true }).catch(() => {});
   if (!rect) return a2.widget.drag().catch(() => {}); // X, Exit, the note: their windows
   const hit = hitAt(e.clientX, e.clientY);
+  if (hit.what === "card" && !hit.dir) return a2.widget.drag().catch(() => {});
   const start = rect;
   const startMarks = marks && { tick: toPx(start, marks.tick), preview: toPx(start, marks.preview) };
   dragging = true;
   fit();
   const go = (m) => {
+    if (!(m.buttons & 1)) return up(); // let go where it was not heard
     const [dx, dy] = [m.clientX - e.clientX, m.clientY - e.clientY];
     if (hit.what === "card") {
       rect = dragged(start, hit.dir, dx, dy, 20);
@@ -95,13 +98,13 @@ box.addEventListener("mousedown", (e) => {
     draw();
   };
   const up = () => {
+    if (!dragging) return;
     removeEventListener("mousemove", go);
     removeEventListener("mouseup", up);
     dragging = false;
     draw();
     if (hit.what !== "card") a2.widget.post({ marks }).catch(() => {});
-    else if (hit.dir) a2.widget.post({ rect, sized: true, marks }).catch(() => {});
-    else a2.widget.post({ rect }).catch(() => {});
+    else a2.widget.post({ rect, marks }).catch(() => {});
   };
   addEventListener("mousemove", go);
   addEventListener("mouseup", up);
