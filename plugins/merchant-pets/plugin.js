@@ -17,12 +17,17 @@ const DUNGEONS = new Set(["Fire Temple", "Krao Cave", "Draupnir"]); // regions, 
 const LABEL = { width: 148, height: 40 }; // fits "105/105 IMPORTANT"
 // Where things go is a layout per aspect ratio of the game's window, that the
 // player aligns (Align). Until then it is guessed from the shop as it stands
-// in a 1920x1080 game (measured 2026-11-05): each card's middle and its
-// bottom, just under the price; the cards keep to the middle of the screen. A
-// card is CARD wide, and that tall above its bottom: all of it opens the shop's
-// purchase window.
+// in a 1920x1080 game (measured 2026-11-05): each card's middle and the bottom
+// of its sides, just under the price; the cards keep to the middle of the
+// screen. A card is CARD wide and tall, its sides `body` of that, the point
+// at its bottom the rest.
 const REF = { width: 1920, height: 1080 };
-const CARD = { width: 160, height: 222 };
+const CARD = { width: 160, height: 244, body: 222 };
+// What a click does where on a card (left, top, right, bottom in a CARD,
+// measured 2026-11-06): the tick at its top marks it, the eye opens a
+// preview page, the rest (its body, the point) its purchase window. The first
+// that holds the click counts.
+const PARTS = [["tick", [65, 0, 95, 21]], ["preview", [18, 81, 49, 108]], ["card", [0, 0, 160, 222]], ["card", [40, 222, 120, 236]]];
 const CARDS = [[383, 487], [614, 539], [844, 558], [1074.5, 558], [1305, 539], [1535, 487],
   [428, 776], [658, 817], [1260.5, 817], [1491, 776]];
 // The shop's own close buttons, X and Exit (left, top, right, bottom), and the
@@ -56,7 +61,9 @@ let every = HOUR; // how often the list changes
 // if it ships later.
 const METER = "2.0.89";
 const canWatch = () => typeof a2.watchInput === "function";
-let watching = null; // the X and Exit zones asked for, as sent
+let watching = null; // the zones asked for, as sent
+let zoneWhat = []; // what each of them is
+let few = false; // the meter takes 16 zones at most
 let unsaved = false; // the last Save could not see where the boxes were
 let noteClosed = true; // the refresh note while the game is closed too (Settings)
 let layouts = {}; // aspect ratio ("1.78") -> the player's layout (see `guess`)
@@ -202,39 +209,47 @@ a2.on("decoded:own-position", (d) => {
 // Talking to an NPC (the merchant too: its list comes right after and shows them again).
 a2.on("decoded:npc-talk", () => hideLabels());
 a2.on("decoded:zone", () => hideLabels());
-// A click on a card opens the shop's purchase window over the labels: they
-// step aside until it closes (Esc, its Cancel or X, or the pet's souls of a
-// purchase), the shop still open.
+// A click on a card opens the shop's purchase window over the labels, or its
+// eye a preview page: they step aside until it closes (Esc, the window's
+// Cancel or X, or the pet's souls of a purchase), the shop still open.
 let buying = false;
 function setBuying(on) {
   if (buying === on) return;
   buying = on;
   refresh();
 }
-// The zones the meter is asked to watch, always all of them so each keeps
-// its index: the shop's X and Exit, each card, then the purchase window's
-// Cancel, X and Purchase.
-const Z = { cards: 2, cancel: 2 + SLOTS, purchase: 4 + SLOTS };
-// Esc, or a click in a zone, while the labels show.
+// Esc, or a click in a zone (what it is: `zoneWhat`), while the labels show.
 a2.on("input", (e) => {
   if (!shown || aligning) return;
-  const z = e.zone;
+  const what = e.key === "Escape" ? "esc" : zoneWhat[e.zone];
   if (buying) {
-    if (e.key === "Escape" || z === Z.cancel || z === Z.cancel + 1) setBuying(false);
+    if (what === "esc" || what === "cancel") setBuying(false);
     // Bought: a pet's souls come at once (and bring the labels back); a mount
     // or a look brings none.
-    if (z === Z.purchase) setTimeout(() => setBuying(false), 600);
-  } else if (e.key === "Escape" || z === 0 || z === 1) hideLabels();
-  else if (z >= Z.cards && z < Z.cards + SLOTS) setBuying(true);
+    if (what === "purchase") setTimeout(() => setBuying(false), 600);
+  } else if (what === "esc" || what === "close") hideLabels();
+  else if (what === "card" || what === "preview") setBuying(true);
 });
 // The purchase window, measured in a 1920x1080 game (2026-11-06): in the
 // middle of the screen, its Cancel, X and Purchase buttons (left, top, right,
 // bottom).
 const PURCHASE = [[765, 706, 957, 746], [1284, 233, 1324, 273], [963, 706, 1155, 746]];
-function zonesFor(a) {
+// The zones to watch, each with what it is: the shop's X and Exit, the cards'
+// parts, the purchase window's Cancel, X and Purchase. `few`: a meter that
+// takes 16 at most gets each card whole.
+function zonesFor(a, few) {
   const l = layoutFor(a);
   const f = (p) => [(p.x - a.x) / a.width, (p.y - a.y) / a.height];
-  return [...l.close, ...l.cards, ...PURCHASE.map(([x0, y0, x1, y1]) => [...f(at(a, x0, y0)), ...f(at(a, x1, y1))])];
+  const part = ([x0, y0, x1, y1], [px0, py0, px1, py1]) => {
+    const w = (x1 - x0) / CARD.width, h = (y1 - y0) / CARD.height;
+    return [x0 + px0 * w, y0 + py0 * h, x0 + px1 * w, y0 + py1 * h];
+  };
+  const parts = few ? [["card", [0, 0, CARD.width, CARD.height]]] : PARTS;
+  return [
+    ...l.close.map((r) => ["close", r]),
+    ...parts.flatMap(([what, p]) => l.cards.map((c) => [what, part(c, p)])),
+    ...PURCHASE.map(([x0, y0, x1, y1], k) => [k < 2 ? "cancel" : "purchase", [...f(at(a, x0, y0)), ...f(at(a, x1, y1))]]),
+  ];
 }
 // The meter watches only while the labels show (zones of the game's window,
 // kept in it so the meter takes them; one off the window shrinks to its corner).
@@ -245,11 +260,18 @@ function watchClose() {
     const z = { x: inside(x0), y: inside(y0), width: inside(x1) - inside(x0), height: inside(y1) - inside(y0) };
     return z.width > 0 && z.height > 0 ? z : { x: 0, y: 0, width: 1e-6, height: 1e-6 };
   };
-  const zones = shown && !aligning ? zonesFor(gameArea()).map(zone) : null;
+  const list = shown && !aligning ? zonesFor(gameArea(), few) : null;
+  const zones = list && list.map(([, r]) => zone(r));
   const key = JSON.stringify(zones);
   if (key === watching) return;
   watching = key;
-  a2.watchInput(zones).catch(() => {});
+  zoneWhat = list ? list.map(([what]) => what) : [];
+  a2.watchInput(zones).catch(() => {
+    if (!zones || zones.length <= 16 || few) return;
+    few = true; // a meter that takes fewer
+    watching = null;
+    watchClose();
+  });
 }
 
 // A point of the 1920x1080 shop in game area `a`. The game scales its
@@ -268,7 +290,7 @@ const gameArea = () => area || { x: 0, y: 0, ...REF };
 function guess(a) {
   const f = (p) => [(p.x - a.x) / a.width, (p.y - a.y) / a.height];
   return {
-    cards: CARDS.map(([x, y]) => [...f(at(a, x - CARD.width / 2, y - CARD.height)), ...f(at(a, x + CARD.width / 2, y))]),
+    cards: CARDS.map(([x, y]) => [...f(at(a, x - CARD.width / 2, y - CARD.body)), ...f(at(a, x + CARD.width / 2, y + CARD.height - CARD.body))]),
     close: CLOSE.map(({ box: [l, t, r, b], side }) => [...f(at(a, l, t, side, true)), ...f(at(a, r, b, side, true))]),
     note: f(at(a, REF.width / 2, NOTE.top, "middle", true)),
   };
@@ -277,13 +299,14 @@ const ratioKey = (a) => (a.width / a.height).toFixed(2);
 const RATIO_NAMES = { "1.78": "16:9", "1.60": "16:10", "2.33": "21:9", "2.37": "21:9", "2.39": "21:9", "3.56": "32:9", "1.33": "4:3", "1.25": "5:4" };
 const ratioName = (k) => RATIO_NAMES[k] || k;
 const layoutFor = (a) => layouts[ratioKey(a)] || guess(a);
-// Where a card's label goes (Settings): under the card, or on it at its
-// bottom, middle or top; its top middle in screen pixels, for zoom `z`.
+// Where a card's label goes (Settings): under the card's sides (on its point),
+// or on it at its bottom, middle or top; its top middle in screen pixels, for
+// zoom `z`.
 const LABEL_AT = ["under", "bottom", "middle", "top"];
 let labelAt = "under";
 function labelOn(a, [x0, y0, x1, y1], z) {
   const top = a.y + y0 * a.height;
-  const bottom = a.y + y1 * a.height;
+  const bottom = top + ((y1 - y0) * a.height * CARD.body) / CARD.height;
   const h = LABEL.height * z * devicePixelRatio;
   const y = { under: bottom, bottom: bottom - h, middle: (top + bottom - h) / 2, top }[labelAt];
   return centred({ x: a.x + ((x0 + x1) / 2) * a.width, y }, LABEL.width * z);
@@ -498,7 +521,7 @@ async function endAlign(keep) {
     const cards = was.cards.map((c, i) => rect(rects[i], c));
     const close = was.close.map((c, k) => rect(rects[SLOTS + k], c));
     const n = rects[SLOTS + 2];
-    layouts[ratioKey(a)] = { cards, close, note: n ? f(n.x + n.width / 2, n.y) : was.note, size: `${a.width}×${a.height}` };
+    layouts[ratioKey(a)] = { v: 2, cards, close, note: n ? f(n.x + n.width / 2, n.y) : was.note, size: `${a.width}×${a.height}` };
     await a2.storage.set("layouts", layouts).catch(() => {});
   }
   for (const name of ALIGN) await a2.widgets.close(name).catch(() => {});
@@ -603,8 +626,8 @@ setInterval(render, 30_000);
   key = (await a2.storage.get("last").catch(() => null)) || null;
   if (key) await load(key);
   layouts = (await a2.storage.get("layouts").catch(() => null)) || {};
-  // Before 0.1.0 a card was its label's middle and top: those go.
-  for (const [k, l] of Object.entries(layouts)) if (l.cards?.[0]?.length !== 4) delete layouts[k];
+  // Layouts from before the cards were whole (v 2) go.
+  for (const [k, l] of Object.entries(layouts)) if (l.v !== 2) delete layouts[k];
   const savedAt = await a2.storage.get("labelAt").catch(() => null);
   labelAt = LABEL_AT.includes(savedAt) ? savedAt : "under";
   $(".label-at select").value = labelAt;
