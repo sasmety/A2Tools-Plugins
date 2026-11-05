@@ -371,6 +371,14 @@ function refresh() {
   });
   return pass;
 }
+// A widget opened at `size`, its top left at `at`: placed before (KWin
+// sometimes opens one mid-screen, and the meter would keep it there) and after
+// (KWin moves one that grows or shrinks, as a card's box does from a label).
+async function placeOpen(name, at, size) {
+  await a2.widgets.place(name, at).catch(() => {});
+  await a2.widgets.open(name, size).catch(() => {});
+  await a2.widgets.place(name, at).catch(() => {});
+}
 async function putUp() {
   watchClose();
   if (aligning) return render();
@@ -383,10 +391,8 @@ async function putUp() {
     const was = sent[i];
     sent[i] = want;
     if (!want) return vanish(name, () => !sent[i]);
-    // Placed before each open: KWin sometimes opens a widget mid-screen,
-    // and the meter would keep it there.
-    if (!was) await a2.widgets.place(name, labelOn(a, layoutFor(a).cards[i], want.zoom)).catch(() => {});
-    await a2.widgets.open(name, sized(LABEL, want.zoom)).catch(() => {});
+    if (was) await a2.widgets.open(name, sized(LABEL, want.zoom)).catch(() => {});
+    else await placeOpen(name, labelOn(a, layoutFor(a).cards[i], want.zoom), sized(LABEL, want.zoom));
     a2.widgets.send(name, want).catch(() => {});
   }));
   render();
@@ -402,8 +408,7 @@ async function makeLabels() {
   await Promise.all(Array.from({ length: SLOTS }, async (_, i) => {
     const name = `card-${i}`;
     if (sent[i]) return;
-    await a2.widgets.place(name, labelOn(a, layoutFor(a).cards[i], z)).catch(() => {});
-    await a2.widgets.open(name, sized(LABEL, z)).catch(() => {});
+    await placeOpen(name, labelOn(a, layoutFor(a).cards[i], z), sized(LABEL, z));
     if (!sent[i] && !aligning) await a2.widgets.close(name).catch(() => {});
   }));
 }
@@ -422,11 +427,8 @@ a2.on("widget-message", ({ name, data }) => {
   if (aligning) {
     if (data?.hello && alignSent[name]) a2.widgets.send(name, alignSent[name]).catch(() => {});
     if (!alignSent[name]?.card) return;
-    // A card sized, or its tick or eye moved: every card the same.
-    const size = data?.size;
-    if (size && size.width >= 20 && size.height >= 20) {
-      for (let i = 0; i < SLOTS; i++) a2.widgets.open(`card-${i}`, { width: Math.round(size.width), height: Math.round(size.height) }).catch(() => {});
-    }
+    // A card scaled (the wheel), or its tick or eye moved: every card the same.
+    if (data?.scale > 0.5 && data.scale < 2) scaleCards(data.scale);
     if (data?.marks) {
       alignMarks = data.marks;
       for (let i = 0; i < SLOTS; i++) {
@@ -512,8 +514,7 @@ async function startAlign() {
   const z = zoomFor(a);
   const show = async (name, at, size, data) => {
     alignSent[name] = data;
-    await a2.widgets.place(name, at).catch(() => {});
-    await a2.widgets.open(name, size).catch(() => {});
+    await placeOpen(name, at, size);
     a2.widgets.send(name, data).catch(() => {});
   };
   // A box as big as what it stands for: each card (blue), X and Exit (red).
@@ -528,8 +529,23 @@ async function startAlign() {
   await show(NOTE.name, centred(onScreen(a, l.note), NOTE.width * z), sized(NOTE, z), { ...noteData(z), align: true });
   render();
 }
+// Every card's box `f` times as big, each about its middle.
+let scaling = Promise.resolve();
+function scaleCards(f) {
+  scaling = scaling.then(() => Promise.all(Array.from({ length: SLOTS }, async (_, i) => {
+    const name = `card-${i}`;
+    const r = await a2.widgets.where(name).catch(() => null);
+    if (!r) return;
+    const dpr = devicePixelRatio;
+    const size = { width: Math.max(20, Math.round((r.width / dpr) * f)), height: Math.max(20, Math.round((r.height / dpr) * f)) };
+    const at = { x: Math.round(r.x + (r.width - size.width * dpr) / 2), y: Math.round(r.y + (r.height - size.height * dpr) / 2) };
+    await placeOpen(name, at, size);
+  })));
+  return scaling;
+}
 async function endAlign(keep) {
   if (!aligning) return;
+  await scaling;
   const a = gameArea();
   const rects = keep ? await Promise.all(ALIGN.map((name) => a2.widgets.where(name).catch(() => null))) : [];
   // A meter that cannot see where its windows are (before 2.0.89 on KDE
