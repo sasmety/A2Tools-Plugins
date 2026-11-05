@@ -71,6 +71,10 @@ let layouts = {}; // aspect ratio ("1.78") -> the player's layout (see `guess`)
 let aligning = false; // the boxes are out to be dragged into place
 const alignSent = {}; // what each widget shows while aligning
 let alignMarks = MARKS; // where the tick and the eye are on every card, while aligning
+// While aligning, each card's box: left, top, width, height in CSS px of the
+// game's area, which its window covers (it never moves or resizes then; the
+// box is drawn, moved and sized in it, so the pointer is never off it).
+let alignRects = [];
 let noteOn = false;
 let noteTimer = 0;
 let refreshTimer = 0;
@@ -426,17 +430,21 @@ function vanish(name, still) {
 a2.on("widget-message", ({ name, data }) => {
   if (aligning) {
     if (data?.hello && alignSent[name]) a2.widgets.send(name, alignSent[name]).catch(() => {});
-    if (!alignSent[name]?.card) return;
-    // A drag in a card's box: it grows, then back to `size` (every card's
-    // too when it was sized). Its tick or eye moved or sized: every card the same.
-    if (data?.grow || data?.size) cardDrag(name, data);
-    if (data?.marks) {
-      alignMarks = data.marks;
-      for (let i = 0; i < SLOTS; i++) {
-        const n = `card-${i}`;
-        alignSent[n] = { ...alignSent[n], marks: alignMarks };
-        if (n !== name) a2.widgets.send(n, alignSent[n]).catch(() => {});
-      }
+    if (!alignSent[name]?.card || !(data?.rect || data?.marks)) return;
+    // A card moved: it alone. Sized: every card's edges move as its did. Its
+    // tick or eye moved or sized: every card the same.
+    const i = Number(name.split("-")[1]);
+    const r = data.rect, was = alignRects[i];
+    if (r && data.sized) {
+      const d = [r[0] - was[0], r[1] - was[1], r[0] + r[2] - was[0] - was[2], r[1] + r[3] - was[1] - was[3]];
+      alignRects = alignRects.map(([x, y, w, h]) => [x + d[0], y + d[1], Math.max(20, w + d[2] - d[0]), Math.max(20, h + d[3] - d[1])]);
+    }
+    if (r) alignRects[i] = r;
+    if (data.marks) alignMarks = data.marks;
+    for (let j = 0; j < SLOTS; j++) {
+      const n = `card-${j}`;
+      alignSent[n] = { ...alignSent[n], rect: alignRects[j], marks: alignMarks };
+      if (j !== i && (data.sized || data.marks)) a2.widgets.send(n, alignSent[n]).catch(() => {});
     }
     return;
   }
@@ -525,41 +533,19 @@ async function startAlign() {
     await show(name, { x: Math.round(from.x), y: Math.round(from.y) }, size, { ...data, exit: true, align: true });
   };
   alignMarks = l.marks || MARKS;
-  for (let i = 0; i < SLOTS; i++) await box(`card-${i}`, l.cards[i], { text: `${text().card} ${i + 1}`, sub: text().drag, card: true, marks: alignMarks });
+  const dpr = devicePixelRatio;
+  alignRects = l.cards.map(([x0, y0, x1, y1]) => [(x0 * a.width) / dpr, (y0 * a.height) / dpr, ((x1 - x0) * a.width) / dpr, ((y1 - y0) * a.height) / dpr]);
+  const whole = { width: Math.round(a.width / dpr), height: Math.round(a.height / dpr) };
+  for (let i = 0; i < SLOTS; i++) {
+    const data = { text: `${text().card} ${i + 1}`, sub: text().drag, card: true, exit: true, align: true, marks: alignMarks, rect: alignRects[i] };
+    await show(`card-${i}`, { x: Math.round(a.x), y: Math.round(a.y) }, whole, data);
+  }
   for (const [k, rect] of l.close.entries()) await box(ALIGN[SLOTS + k], rect, { text: k ? "Exit" : "X" });
   await show(NOTE.name, centred(onScreen(a, l.note), NOTE.width * z), sized(NOTE, z), { ...noteData(z), align: true });
   render();
 }
-// A drag in a card's box ({ grow }, then { size, all }): the window grows to
-// the game's bottom right, so the pointer stays in it (it hears nothing
-// outside), and the box draws itself there as it goes. Let go, it is `size`
-// again, and with `all` every card is; each keeps its top left.
-let scaling = Promise.resolve(); // in turn, so a let-go never comes before its grow
-function cardDrag(name, { grow, size, all }) {
-  scaling = scaling.then(async () => {
-    const dpr = devicePixelRatio;
-    const topLeft = async (n) => {
-      const r = await a2.widgets.where(n).catch(() => null);
-      return r && { x: r.x, y: r.y, width: r.width / dpr, height: r.height / dpr };
-    };
-    if (grow) {
-      const r = await topLeft(name);
-      const a = gameArea();
-      if (r) await placeOpen(name, { x: r.x, y: r.y }, { width: Math.round(Math.max(r.width, (a.x + a.width - r.x) / dpr)), height: Math.round(Math.max(r.height, (a.y + a.height - r.y) / dpr)) });
-      return;
-    }
-    const want = { width: Math.max(20, Math.round(size.width)), height: Math.max(20, Math.round(size.height)) };
-    const names = all ? Array.from({ length: SLOTS }, (_, i) => `card-${i}`) : [name];
-    await Promise.all(names.map(async (n) => {
-      const r = await topLeft(n);
-      if (r) await placeOpen(n, { x: r.x, y: r.y }, want);
-    }));
-  });
-  return scaling;
-}
 async function endAlign(keep) {
   if (!aligning) return;
-  await scaling;
   const a = gameArea();
   const rects = keep ? await Promise.all(ALIGN.map((name) => a2.widgets.where(name).catch(() => null))) : [];
   // A meter that cannot see where its windows are (before 2.0.89 on KDE
@@ -570,7 +556,8 @@ async function endAlign(keep) {
     const was = layoutFor(a);
     const f = (x, y) => [(x - a.x) / a.width, (y - a.y) / a.height];
     const rect = (r, was) => (r ? [...f(r.x, r.y), ...f(r.x + r.width, r.y + r.height)] : was);
-    const cards = was.cards.map((c, i) => rect(rects[i], c));
+    const dpr = devicePixelRatio;
+    const cards = alignRects.map(([x, y, w, h]) => [(x * dpr) / a.width, (y * dpr) / a.height, ((x + w) * dpr) / a.width, ((y + h) * dpr) / a.height]);
     const close = was.close.map((c, k) => rect(rects[SLOTS + k], c));
     const n = rects[SLOTS + 2];
     layouts[ratioKey(a)] = { v: 2, cards, marks: alignMarks, close, note: n ? f(n.x + n.width / 2, n.y) : was.note, size: `${a.width}×${a.height}` };
