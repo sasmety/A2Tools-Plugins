@@ -9,7 +9,8 @@ const SLOTS = 10; // cards on the merchant's page
 const PET_TABS = new Set([0xcc, 0xc9]); // the list's first byte: CC Pets, C9 Special (sells pets too), CB Skins
 // The game says nothing when the shop closes (2026-11-05 capture), so labels go
 // on Esc or a click on the shop's X or Exit (the meter's "input" event), a
-// click on a label, another tab, a skill of yours, a soul, talking to an NPC,
+// click on a label, another tab, a skill of yours, a soul (for a pet not on
+// the list: one bought keeps them), talking to an NPC,
 // a new map, or this long after the last list.
 const HIDE_MS = 3 * 60_000;
 const DUNGEONS = new Set(["Fire Temple", "Krao Cave", "Draupnir"]); // regions, by English name
@@ -135,7 +136,11 @@ onPets("decoded:pet-list", (st, data) => {
 });
 onPets("decoded:soul-gained", (st, data) => {
   for (const { pet, amount } of data.souls || []) gain(st, pet, amount);
-  shown = false; // a soul: you're fighting, not shopping
+  // Bought here, the souls are a card's pet's (2026-11-05: each buy, then its
+  // pet's 5 souls 50 ms later): the labels stay, with the new count. Any
+  // other soul: you're fighting, not shopping.
+  const listed = new Set((shop?.rows || []).map((r) => r.pet));
+  if (!(data.souls || []).every(({ pet }) => listed.has(pet))) shown = false;
 });
 onPets("decoded:level-up", (st, { pet, level }) => {
   // The game takes the levels' cost from the pet's souls; already levelled
