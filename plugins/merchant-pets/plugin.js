@@ -23,11 +23,12 @@ const LABEL = { width: 148, height: 40 }; // fits "105/105 IMPORTANT"
 // at its bottom the rest.
 const REF = { width: 1920, height: 1080 };
 const CARD = { width: 160, height: 244, body: 222 };
-// What a click does where on a card (left, top, right, bottom in a CARD,
-// measured 2026-11-06): the tick at its top marks it, the eye opens a
-// preview page, the rest (its body, the point) its purchase window. The first
-// that holds the click counts.
-const PARTS = [["tick", [65, 0, 95, 21]], ["preview", [18, 81, 49, 108]], ["card", [0, 0, 160, 222]], ["card", [40, 222, 120, 236]]];
+// What a click does where on a card (left, top, right, bottom as fractions
+// of it, measured 2026-11-06): the tick at its top marks it, the eye opens a
+// preview page (MARKS: the player can move and size them, Align, the same on
+// every card); the rest, its body and the point, its purchase window.
+const MARKS = { tick: [65 / 160, 0, 95 / 160, 21 / 244], preview: [18 / 160, 81 / 244, 49 / 160, 108 / 244] };
+const BODY = [[0, 0, 1, 222 / 244], [0.25, 222 / 244, 0.75, 236 / 244]];
 const CARDS = [[383, 487], [614, 539], [844, 558], [1074.5, 558], [1305, 539], [1535, 487],
   [428, 776], [658, 817], [1260.5, 817], [1491, 776]];
 // The shop's own close buttons, X and Exit (left, top, right, bottom), and the
@@ -69,6 +70,7 @@ let noteClosed = true; // the refresh note while the game is closed too (Setting
 let layouts = {}; // aspect ratio ("1.78") -> the player's layout (see `guess`)
 let aligning = false; // the boxes are out to be dragged into place
 const alignSent = {}; // what each widget shows while aligning
+let alignMarks = MARKS; // where the tick and the eye are on every card, while aligning
 let noteOn = false;
 let noteTimer = 0;
 let refreshTimer = 0;
@@ -245,10 +247,11 @@ function zonesFor(a, few) {
   const l = layoutFor(a);
   const f = (p) => [(p.x - a.x) / a.width, (p.y - a.y) / a.height];
   const part = ([x0, y0, x1, y1], [px0, py0, px1, py1]) => {
-    const w = (x1 - x0) / CARD.width, h = (y1 - y0) / CARD.height;
+    const w = x1 - x0, h = y1 - y0;
     return [x0 + px0 * w, y0 + py0 * h, x0 + px1 * w, y0 + py1 * h];
   };
-  const parts = few ? [["card", [0, 0, CARD.width, CARD.height]]] : PARTS;
+  const m = l.marks || MARKS;
+  const parts = few ? [["card", [0, 0, 1, 1]]] : [["tick", m.tick], ["preview", m.preview], ...BODY.map((b) => ["card", b])];
   return [
     ...l.close.map((r) => ["close", r]),
     ...parts.flatMap(([what, p]) => l.cards.map((c) => [what, part(c, p)])),
@@ -418,6 +421,20 @@ function vanish(name, still) {
 a2.on("widget-message", ({ name, data }) => {
   if (aligning) {
     if (data?.hello && alignSent[name]) a2.widgets.send(name, alignSent[name]).catch(() => {});
+    if (!alignSent[name]?.card) return;
+    // A card sized, or its tick or eye moved: every card the same.
+    const size = data?.size;
+    if (size && size.width >= 20 && size.height >= 20) {
+      for (let i = 0; i < SLOTS; i++) a2.widgets.open(`card-${i}`, { width: Math.round(size.width), height: Math.round(size.height) }).catch(() => {});
+    }
+    if (data?.marks) {
+      alignMarks = data.marks;
+      for (let i = 0; i < SLOTS; i++) {
+        const n = `card-${i}`;
+        alignSent[n] = { ...alignSent[n], marks: alignMarks };
+        if (n !== name) a2.widgets.send(n, alignSent[n]).catch(() => {});
+      }
+    }
     return;
   }
   if (name === NOTE.name) {
@@ -505,7 +522,8 @@ async function startAlign() {
     const size = { width: Math.round(((x1 - x0) * a.width) / devicePixelRatio), height: Math.round(((y1 - y0) * a.height) / devicePixelRatio) };
     await show(name, { x: Math.round(from.x), y: Math.round(from.y) }, size, { ...data, exit: true, align: true });
   };
-  for (let i = 0; i < SLOTS; i++) await box(`card-${i}`, l.cards[i], { text: `${text().card} ${i + 1}`, sub: text().drag, card: true });
+  alignMarks = l.marks || MARKS;
+  for (let i = 0; i < SLOTS; i++) await box(`card-${i}`, l.cards[i], { text: `${text().card} ${i + 1}`, sub: text().drag, card: true, marks: alignMarks });
   for (const [k, rect] of l.close.entries()) await box(ALIGN[SLOTS + k], rect, { text: k ? "Exit" : "X" });
   await show(NOTE.name, centred(onScreen(a, l.note), NOTE.width * z), sized(NOTE, z), { ...noteData(z), align: true });
   render();
@@ -525,7 +543,7 @@ async function endAlign(keep) {
     const cards = was.cards.map((c, i) => rect(rects[i], c));
     const close = was.close.map((c, k) => rect(rects[SLOTS + k], c));
     const n = rects[SLOTS + 2];
-    layouts[ratioKey(a)] = { v: 2, cards, close, note: n ? f(n.x + n.width / 2, n.y) : was.note, size: `${a.width}×${a.height}` };
+    layouts[ratioKey(a)] = { v: 2, cards, marks: alignMarks, close, note: n ? f(n.x + n.width / 2, n.y) : was.note, size: `${a.width}×${a.height}` };
     await a2.storage.set("layouts", layouts).catch(() => {});
   }
   for (const name of ALIGN) await a2.widgets.close(name).catch(() => {});

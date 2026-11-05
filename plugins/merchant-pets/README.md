@@ -14,7 +14,7 @@ Names come from the game's own texts, in the meter's language (all ten). Turkish
 
 ## Where the labels go
 
-The game draws its shop at a size set by the window's shorter side, centred, so the labels are placed from a measured 1920×1080 shop, scaled to the game's window. Settings → **Align** puts every card (as blue boxes, each a card's size), the shop's two close buttons (as red boxes) and the note out to be dragged into place over the open shop; **Save** keeps that layout for the window's aspect ratio (16:9, 21:9, …), each ratio its own. **Reset to estimate** goes back. Each label sits under its card, or on it at its bottom, middle or top (Settings → **Label**).
+The game draws its shop at a size set by the window's shorter side, centred, so the labels are placed from a measured 1920×1080 shop, scaled to the game's window. Settings → **Align** puts every card (as blue boxes, sized at a corner: all take the size, and the tick and eye in one, yellow, move and size for all), the shop's two close buttons (as red boxes) and the note out to be dragged into place over the open shop; **Save** keeps that layout for the window's aspect ratio (16:9, 21:9, …), each ratio its own. **Reset to estimate** goes back. Each label sits under its card, or on it at its bottom, middle or top (Settings → **Label**).
 
 ## When the labels go
 
