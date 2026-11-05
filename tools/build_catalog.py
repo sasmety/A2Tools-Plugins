@@ -38,10 +38,12 @@ SKIP = {"README.md", "changes.json"}
 # event; meter 2.0.65). A meter without it simply has no a2.bossTimers.
 # "widgets": small windows of the plugin's own (a2.widgets, meter 2.0.68).
 # "fps": the game's frame rate (a2.watchFps, a2.fpsAdmin; meter 2.0.78).
+# "events:input": Esc, and left clicks in parts of the game's window the
+# plugin marks, while the game is in front (a2.watchInput; meter 2.0.89).
 # Frames no decoder may read (the meter's REFUSED_OPCODES): another player
 # coming into view, and players' movement.
 REFUSED_OPCODES = {"44 36", "45 36", "1E 37", "1F 37", "20 37", "28 37", "29 37", "2A 37"}
-PERMISSIONS = {"storage", "notify", "events:character", "window", "feed:boss-timers", "widgets", "fps", "events:death-recap", "events:loot-rolls", "screenshot"}
+PERMISSIONS = {"storage", "notify", "events:character", "window", "feed:boss-timers", "widgets", "fps", "events:death-recap", "events:loot-rolls", "screenshot", "events:input"}
 DECODER_TYPES = {"u8", "u16", "u32", "u64", "i32", "varint", "list"}
 
 
