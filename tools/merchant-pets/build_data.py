@@ -1,10 +1,11 @@
 """Writes plugins/merchant-pets/data.js from Pet Soul Tracker's game data.
 
 The Black Cloud Merchant sells a pet as an item ("Pet: Fossa", ids 534760001
-on); ITEMS below says which pet id each is: the item ids and English names
-from aion2hub.com's item list, matched by name against the game's pet names. The rest comes from plugins/pet-souls: each pet's names,
-genus and the regions whose monsters drop its souls, with how many spawn and
-the best drop chance there. Run it after pet-souls' data changes:
+on). ITEMS below says which pet id each is: the item ids and English names
+come from aion2hub.com's item list, matched by name against the game's pet
+names. The rest comes from plugins/pet-souls: each pet's names, genus and
+the regions whose monsters drop its souls, with how many spawn and the best
+drop chance there. Run it after pet-souls' data changes:
 
     python tools/merchant-pets/build_data.py
 """

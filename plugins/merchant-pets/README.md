@@ -3,10 +3,12 @@
 At the Black Cloud Merchant (Pets and Special tabs), a small label under each pet card:
 
 - **x/105**: your souls toward the pet's last level (5 + 25 + 75), counted as Pet Soul Tracker counts them. Greyed at 105.
-- **IMPORTANT**: no monster on an open map drops its souls: only dungeons, chests or the merchant. **RARE**: few monsters drop them (5 spawns or fewer, or under 1%).
+- **IMPORTANT**: no monster on an open map drops its souls, as far as Pet Soul Tracker's data knows (it covers Altgard, Verteron, Chaotic Lower Reshanta and three dungeons): only dungeons, chests or the merchant. **RARE**: few monsters drop them (5 spawns or fewer, or under 1%).
 - Under it, the pet's genus and the region with the most spawns of a monster that drops its souls (+N more regions).
 
 The window lists the same pets with every region, how many spawns and the best drop chance, and when the list refreshes. With the shop shut, a note at the top of the screen says when the list has refreshed (also while the game is closed, unless turned off in Settings).
+
+Counts start from the pet list the game sends at login: installed mid-session, the plugin shows 0 for your pets until you log in again.
 
 Names come from the game's own texts, in the meter's language (all ten). Turkish can be picked in Settings, since the meter has none.
 

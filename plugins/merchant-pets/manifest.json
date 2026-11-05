@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "apiVersion": 2,
   "author": "sasmety",
-  "description": "Black Cloud Merchant: under each pet card, your souls toward its last level (x/105), its genus and where its souls drop, and IMPORTANT on pets only dungeons, chests or the merchant give (RARE on ones few monsters drop). You align the labels once per screen shape. Esc and the shop's close buttons hide them with meter 2.0.89 or newer.",
+  "description": "At the Black Cloud Merchant, a label under each pet card with your souls toward its last level, its genus and where its souls drop, marked IMPORTANT or RARE when they are hard to farm.",
   "permissions": [
     "storage",
     "window",

@@ -73,10 +73,10 @@ const load = async (k) => {
   }
   return states.get(k);
 };
-let saveTimer = 0;
+const saveTimers = {}; // one per server, so one's save never drops another's
 const save = (k) => {
-  clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => a2.storage.set(k, states.get(k)).catch(() => {}), 1000);
+  clearTimeout(saveTimers[k]);
+  saveTimers[k] = setTimeout(() => a2.storage.set(k, states.get(k)).catch(() => {}), 1000);
 };
 
 const souls = (st, pet) => {
@@ -122,7 +122,9 @@ const queued = (fn) => {
 };
 const onPets = (event, fn) =>
   a2.on(event, (data, meta) => queued(async () => {
-    const k = keyFor(meta?.character) || key || "server-unknown";
+    // A pet list without a server (a new character's) never takes the
+    // current server's counts, as in Pet Soul Tracker.
+    const k = keyFor(meta?.character) || (event === "decoded:pet-list" ? "server-unknown" : key || "server-unknown");
     fn(await load(k), data);
     save(k);
     if (k === key) refresh();
@@ -140,7 +142,7 @@ onPets("decoded:soul-gained", (st, data) => {
   // pet's 5 souls 50 ms later): the labels stay, with the new count. Any
   // other soul: you're fighting, not shopping.
   const listed = new Set((shop?.rows || []).map((r) => r.pet));
-  if (!(data.souls || []).every(({ pet }) => listed.has(pet))) shown = false;
+  if (!(data.souls || []).every(({ pet }) => listed.has(pet))) hideLabels();
 });
 onPets("decoded:level-up", (st, { pet, level }) => {
   // The game takes the levels' cost from the pet's souls; already levelled
@@ -375,6 +377,7 @@ function scheduleNote() {
   clearTimeout(refreshTimer);
   refreshTimer = setTimeout(() => {
     if (noteDue()) note(true);
+    refresh(); // labels of the list that ran out go
     scheduleNote();
   }, nextRefresh(now, shop?.refreshAt, every) - now + 2000);
 }
