@@ -86,11 +86,18 @@ async function boxOnScreen(i) {
   return r && { x: r.x + x * devicePixelRatio, y: r.y + y * devicePixelRatio, w, h };
 }
 // Card `i`'s window round a box at `b` (as boxOnScreen gives it); where the
-// box is drawn in it from where the window really is (kept on the screen).
+// box is drawn in it from where the window really is, once KWin is done with
+// it (it may move a window that grew, keep one on the screen, or not move it:
+// the box stays where it is on screen either way).
+const SETTLE = 150;
 async function boxAt(i, b) {
   const name = `card-${i}`, dpr = devicePixelRatio;
   const w = Math.max(20, b.w), h = Math.max(20, b.h);
-  await placeOpen(name, { x: Math.round(b.x - MARGIN * dpr), y: Math.round(b.y - MARGIN * dpr) }, { width: Math.round(w + 2 * MARGIN), height: Math.round(h + 2 * MARGIN) });
+  const at = { x: Math.round(b.x - MARGIN * dpr), y: Math.round(b.y - MARGIN * dpr) };
+  await placeOpen(name, at, { width: Math.round(w + 2 * MARGIN), height: Math.round(h + 2 * MARGIN) });
+  await new Promise((r) => setTimeout(r, SETTLE));
+  await a2.widgets.place(name, at).catch(() => {});
+  await new Promise((r) => setTimeout(r, SETTLE));
   const r = await a2.widgets.where(name).catch(() => null);
   alignRects[i] = r && (r.x || r.y) ? [(b.x - r.x) / dpr, (b.y - r.y) / dpr, w, h] : [MARGIN, MARGIN, w, h];
   alignSent[name] = { ...alignSent[name], rect: alignRects[i], marks: alignMarks };
@@ -561,12 +568,11 @@ async function startAlign() {
   alignMarks = l.marks || MARKS;
   const dpr = devicePixelRatio;
   alignRects = l.cards.map(([x0, y0, x1, y1]) => [(x0 * a.width) / dpr, (y0 * a.height) / dpr, ((x1 - x0) * a.width) / dpr, ((y1 - y0) * a.height) / dpr]);
-  alignWork = Promise.resolve();
-  for (let i = 0; i < SLOTS; i++) {
+  alignWork = Promise.all(alignRects.map(([x, y, w, h], i) => {
     alignSent[`card-${i}`] = { text: `${text().card} ${i + 1}`, sub: text().drag, card: true, exit: true, align: true };
-    const [x, y, w, h] = alignRects[i];
-    await boxAt(i, { x: a.x + x * dpr, y: a.y + y * dpr, w, h });
-  }
+    return boxAt(i, { x: a.x + x * dpr, y: a.y + y * dpr, w, h });
+  }));
+  await alignWork;
   for (const [k, rect] of l.close.entries()) await box(ALIGN[SLOTS + k], rect, { text: k ? "Exit" : "X" });
   await show(NOTE.name, centred(onScreen(a, l.note), NOTE.width * z), sized(NOTE, z), { ...noteData(z), align: true });
   render();
