@@ -24,7 +24,10 @@ body { display: flex; justify-content: center; }
 .label.exit { width: 100vw; height: 100vh; max-width: none; padding: 0; border: 2px dashed #ff6b5e; background: rgba(255, 107, 94, 0.18); }
 /* A card while aligning: the whole card, where a click opens its purchase window. */
 .label.exit.card { position: relative; border-color: #5ea8ff; background: rgba(94, 168, 255, 0.18); }
-/* On it, its tick and eye, moved and sized (the wheel) in it. */
-.mark { display: none; }
+/* On it, its tick and eye; a grip at its corner and theirs sizes them. */
+.mark, .grip { display: none; }
+.card .grip { display: block; position: absolute; right: 0; bottom: 0; width: 14px; height: 14px; cursor: nwse-resize;
+  background: linear-gradient(135deg, transparent 50%, #5ea8ff 50%); }
+.card .mark .grip { width: 9px; height: 9px; background: linear-gradient(135deg, transparent 50%, #f4d35e 50%); }
 .card .mark { display: flex; position: absolute; box-sizing: border-box; align-items: center; justify-content: center;
   border: 2px dashed #f4d35e; background: rgba(244, 211, 94, 0.25); color: #f4d35e; font: 700 12px/1 system-ui, sans-serif; }

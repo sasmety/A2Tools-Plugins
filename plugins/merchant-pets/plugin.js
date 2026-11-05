@@ -427,8 +427,9 @@ a2.on("widget-message", ({ name, data }) => {
   if (aligning) {
     if (data?.hello && alignSent[name]) a2.widgets.send(name, alignSent[name]).catch(() => {});
     if (!alignSent[name]?.card) return;
-    // A card scaled (the wheel), or its tick or eye moved: every card the same.
-    if (data?.scale > 0.5 && data.scale < 2) scaleCards(data.scale);
+    // A card being sized: it alone till it is let go, then every card the
+    // same. Its tick or eye moved or sized: every card the same.
+    if (data?.size) sizeCard(name, data);
     if (data?.marks) {
       alignMarks = data.marks;
       for (let i = 0; i < SLOTS; i++) {
@@ -529,19 +530,35 @@ async function startAlign() {
   await show(NOTE.name, centred(onScreen(a, l.note), NOTE.width * z), sized(NOTE, z), { ...noteData(z), align: true });
   render();
 }
-// Every card's box `f` times as big, each about its middle.
-let scaling = Promise.resolve();
-function scaleCards(f) {
-  scaling = scaling.then(() => Promise.all(Array.from({ length: SLOTS }, async (_, i) => {
-    const name = `card-${i}`;
+// A card's box sized from its grip ({ size, start, end } as it goes): only
+// the newest size is drawn, its top left kept; let go, every card takes it.
+let sizing = null; // { name, at, want, last, end, busy }
+let scaling = Promise.resolve(); // the other cards taking a size
+async function sizeCard(name, { size, start, end }) {
+  if (start) sizing = { name, at: null, want: null, last: null, end: false, busy: true };
+  const s = sizing;
+  if (!s || s.name !== name) return;
+  if (size) s.want = { width: Math.max(20, Math.round(size.width)), height: Math.max(20, Math.round(size.height)) };
+  s.end ||= !!end;
+  if (start) {
     const r = await a2.widgets.where(name).catch(() => null);
-    if (!r) return;
-    const dpr = devicePixelRatio;
-    const size = { width: Math.max(20, Math.round((r.width / dpr) * f)), height: Math.max(20, Math.round((r.height / dpr) * f)) };
-    const at = { x: Math.round(r.x + (r.width - size.width * dpr) / 2), y: Math.round(r.y + (r.height - size.height * dpr) / 2) };
-    await placeOpen(name, at, size);
-  })));
-  return scaling;
+    s.at = r && { x: r.x, y: r.y };
+  } else if (s.busy) return; // the one drawing takes the newest
+  s.busy = true;
+  while (s.want) {
+    s.last = s.want;
+    s.want = null;
+    await a2.widgets.open(name, s.last).catch(() => {});
+    if (s.at) await a2.widgets.place(name, s.at).catch(() => {});
+  }
+  s.busy = false;
+  if (!s.end || !s.last || sizing !== s) return;
+  sizing = null;
+  scaling = Promise.all(Array.from({ length: SLOTS }, async (_, i) => {
+    const n = `card-${i}`;
+    const r = n !== name && (await a2.widgets.where(n).catch(() => null));
+    if (r) await placeOpen(n, { x: r.x, y: r.y }, s.last);
+  }));
 }
 async function endAlign(keep) {
   if (!aligning) return;
