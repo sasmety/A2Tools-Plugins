@@ -23,7 +23,7 @@ The game sends nothing when the shop closes. The labels go on:
 - **Esc**, or a left click on the shop's X or Exit button (meter 2.0.89 or newer, `events:input`: while the labels show, the plugin marks parts of the game's window as zones, and hears only "Esc" or which zone a click was in, never where the mouse is);
 - a click on a label, the Skins tab, a skill of yours, a soul for a pet that isn't on the list (buying one keeps them, with its new count), talking to an NPC, a new map, or 3 minutes after the last list.
 
-A click on a card opens the game's purchase window over the labels, and one on its eye a preview page: they step aside until it closes (Esc, its Cancel or X, or a purchase, which brings them back with the new count), and the shop stays open. With meter 2.0.89 or newer.
+A click on a card opens the game's purchase window over the labels, and one on its eye a preview page (it closes with Esc or its X, back to the shop): they step aside until it closes (Esc, its Cancel or X, or a purchase, which brings them back with the new count), and the shop stays open. With meter 2.0.89 or newer.
 
 On an older meter all of these but Esc and the buttons still work, and the window says which meter is needed. The game's window position and size (the `game` event's `area`) also come with 2.0.89; before it, a 1920×1080 game at the top left is assumed.
 

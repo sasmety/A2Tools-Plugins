@@ -210,8 +210,9 @@ a2.on("decoded:own-position", (d) => {
 a2.on("decoded:npc-talk", () => hideLabels());
 a2.on("decoded:zone", () => hideLabels());
 // A click on a card opens the shop's purchase window over the labels, or its
-// eye a preview page: they step aside until it closes (Esc, the window's
-// Cancel or X, or the pet's souls of a purchase), the shop still open.
+// eye a preview page: they step aside ("buy", "preview") until it closes, the
+// shop still open. The window: Esc, its Cancel or X, or the pet's souls of a
+// purchase. The page: Esc, or its X (where the shop's is).
 let buying = false;
 function setBuying(on) {
   if (buying === on) return;
@@ -222,13 +223,16 @@ function setBuying(on) {
 a2.on("input", (e) => {
   if (!shown || aligning) return;
   const what = e.key === "Escape" ? "esc" : zoneWhat[e.zone];
-  if (buying) {
+  if (buying === "preview") {
+    if (what === "esc" || what === "close") setBuying(false);
+  } else if (buying) {
     if (what === "esc" || what === "cancel") setBuying(false);
     // Bought: a pet's souls come at once (and bring the labels back); a mount
     // or a look brings none.
     if (what === "purchase") setTimeout(() => setBuying(false), 600);
   } else if (what === "esc" || what === "close") hideLabels();
-  else if (what === "card" || what === "preview") setBuying(true);
+  else if (what === "card") setBuying("buy");
+  else if (what === "preview") setBuying("preview");
 });
 // The purchase window, measured in a 1920x1080 game (2026-11-06): in the
 // middle of the screen, its Cancel, X and Purchase buttons (left, top, right,
