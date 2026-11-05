@@ -13,7 +13,7 @@ a2.on("widget", (d) => {
   document.body.style.visibility = d.hide ? "hidden" : "visible"; // emptied just before it closes
   if (d.hide) return;
   document.documentElement.style.setProperty("--z", String(d.zoom || 1)); // bigger on big screens
-  box.className = `label ${d.tag || ""}${d.done ? " done" : ""}${d.align ? " align" : ""}${d.exit ? " exit" : ""}`;
+  box.className = `label ${d.tag || ""}${d.done ? " done" : ""}${d.align ? " align" : ""}${d.exit ? " exit" : ""}${d.card ? " card" : ""}`;
   box.querySelector(".n").textContent = d.text;
   box.querySelector(".t").textContent = d.tagText || "";
   box.querySelector(".sub").textContent = d.sub || "";

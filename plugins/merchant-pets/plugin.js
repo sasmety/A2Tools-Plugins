@@ -18,8 +18,11 @@ const LABEL = { width: 148, height: 40 }; // fits "105/105 IMPORTANT"
 // Where things go is a layout per aspect ratio of the game's window, that the
 // player aligns (Align). Until then it is guessed from the shop as it stands
 // in a 1920x1080 game (measured 2026-11-05): each card's middle and its
-// label's top, just under the price; the cards keep to the middle of the screen.
+// bottom, just under the price; the cards keep to the middle of the screen. A
+// card is CARD wide, and that tall above its bottom: all of it opens the shop's
+// purchase window.
 const REF = { width: 1920, height: 1080 };
+const CARD = { width: 160, height: 222 };
 const CARDS = [[383, 487], [614, 539], [844, 558], [1074.5, 558], [1305, 539], [1535, 487],
   [428, 776], [658, 817], [1260.5, 817], [1491, 776]];
 // The shop's own close buttons, X and Exit (left, top, right, bottom), and the
@@ -226,16 +229,12 @@ a2.on("input", (e) => {
 });
 // The purchase window, measured in a 1920x1080 game (2026-11-06): in the
 // middle of the screen, its Cancel, X and Purchase buttons (left, top, right,
-// bottom). And a card: so wide, and so tall above its label's top.
+// bottom).
 const PURCHASE = [[765, 706, 957, 746], [1284, 233, 1324, 273], [963, 706, 1155, 746]];
-const CARD = { width: 160, height: 222 };
 function zonesFor(a) {
   const l = layoutFor(a);
-  const s = Math.min(a.width / REF.width, a.height / REF.height);
   const f = (p) => [(p.x - a.x) / a.width, (p.y - a.y) / a.height];
-  const w = (CARD.width * s) / 2 / a.width;
-  const cards = l.cards.map(([x, y]) => [x - w, y - (CARD.height * s) / a.height, x + w, y]);
-  return [...l.close, ...cards, ...PURCHASE.map(([x0, y0, x1, y1]) => [...f(at(a, x0, y0)), ...f(at(a, x1, y1))])];
+  return [...l.close, ...l.cards, ...PURCHASE.map(([x0, y0, x1, y1]) => [...f(at(a, x0, y0)), ...f(at(a, x1, y1))])];
 }
 // The meter watches only while the labels show (zones of the game's window,
 // kept in it so the meter takes them; one off the window shrinks to its corner).
@@ -264,12 +263,12 @@ function at(a, rx, ry, side, top) {
 }
 const gameArea = () => area || { x: 0, y: 0, ...REF };
 // A layout: where things stand in the game's area, as fractions of its width
-// and height. cards: each label's middle and top; close: X's and Exit's left,
-// top, right, bottom; note: the note's middle and top.
+// and height. cards and close (X, Exit): each one's left, top, right, bottom;
+// note: the note's middle and top.
 function guess(a) {
   const f = (p) => [(p.x - a.x) / a.width, (p.y - a.y) / a.height];
   return {
-    cards: CARDS.map(([x, y]) => f(at(a, x, y))),
+    cards: CARDS.map(([x, y]) => [...f(at(a, x - CARD.width / 2, y - CARD.height)), ...f(at(a, x + CARD.width / 2, y))]),
     close: CLOSE.map(({ box: [l, t, r, b], side }) => [...f(at(a, l, t, side, true)), ...f(at(a, r, b, side, true))]),
     note: f(at(a, REF.width / 2, NOTE.top, "middle", true)),
   };
@@ -278,6 +277,17 @@ const ratioKey = (a) => (a.width / a.height).toFixed(2);
 const RATIO_NAMES = { "1.78": "16:9", "1.60": "16:10", "2.33": "21:9", "2.37": "21:9", "2.39": "21:9", "3.56": "32:9", "1.33": "4:3", "1.25": "5:4" };
 const ratioName = (k) => RATIO_NAMES[k] || k;
 const layoutFor = (a) => layouts[ratioKey(a)] || guess(a);
+// Where a card's label goes (Settings): under the card, or on it at its
+// bottom, middle or top; its top middle in screen pixels, for zoom `z`.
+const LABEL_AT = ["under", "bottom", "middle", "top"];
+let labelAt = "under";
+function labelOn(a, [x0, y0, x1, y1], z) {
+  const top = a.y + y0 * a.height;
+  const bottom = a.y + y1 * a.height;
+  const h = LABEL.height * z * devicePixelRatio;
+  const y = { under: bottom, bottom: bottom - h, middle: (top + bottom - h) / 2, top }[labelAt];
+  return centred({ x: a.x + ((x0 + x1) / 2) * a.width, y }, LABEL.width * z);
+}
 // A point of a layout on screen, in game area `a`.
 const onScreen = (a, [fx, fy]) => ({ x: a.x + fx * a.width, y: a.y + fy * a.height });
 // How big labels and the note are drawn: as big as the game draws its
@@ -345,7 +355,7 @@ async function putUp() {
     if (!want) return vanish(name, () => !sent[i]);
     // Placed before each open: KWin sometimes opens a widget mid-screen,
     // and the meter would keep it there.
-    if (!was) await a2.widgets.place(name, centred(onScreen(a, layoutFor(a).cards[i]), LABEL.width * want.zoom)).catch(() => {});
+    if (!was) await a2.widgets.place(name, labelOn(a, layoutFor(a).cards[i], want.zoom)).catch(() => {});
     await a2.widgets.open(name, sized(LABEL, want.zoom)).catch(() => {});
     a2.widgets.send(name, want).catch(() => {});
   }));
@@ -362,7 +372,7 @@ async function makeLabels() {
   await Promise.all(Array.from({ length: SLOTS }, async (_, i) => {
     const name = `card-${i}`;
     if (sent[i]) return;
-    await a2.widgets.place(name, centred(onScreen(a, layoutFor(a).cards[i]), LABEL.width * z)).catch(() => {});
+    await a2.widgets.place(name, labelOn(a, layoutFor(a).cards[i], z)).catch(() => {});
     await a2.widgets.open(name, sized(LABEL, z)).catch(() => {});
     if (!sent[i] && !aligning) await a2.widgets.close(name).catch(() => {});
   }));
@@ -462,15 +472,14 @@ async function startAlign() {
     await a2.widgets.open(name, size).catch(() => {});
     a2.widgets.send(name, data).catch(() => {});
   };
-  for (let i = 0; i < SLOTS; i++) {
-    const data = { text: `${text().card} ${i + 1}`, sub: text().drag, align: true, zoom: z };
-    await show(`card-${i}`, centred(onScreen(a, l.cards[i]), LABEL.width * z), sized(LABEL, z), data);
-  }
-  for (const [k, [x0, y0, x1, y1]] of l.close.entries()) {
+  // A box as big as what it stands for: each card (blue), X and Exit (red).
+  const box = async (name, [x0, y0, x1, y1], data) => {
     const from = onScreen(a, [x0, y0]);
     const size = { width: Math.round(((x1 - x0) * a.width) / devicePixelRatio), height: Math.round(((y1 - y0) * a.height) / devicePixelRatio) };
-    await show(ALIGN[SLOTS + k], { x: Math.round(from.x), y: Math.round(from.y) }, size, { text: k ? "Exit" : "X", exit: true, align: true });
-  }
+    await show(name, { x: Math.round(from.x), y: Math.round(from.y) }, size, { ...data, exit: true, align: true });
+  };
+  for (let i = 0; i < SLOTS; i++) await box(`card-${i}`, l.cards[i], { text: `${text().card} ${i + 1}`, sub: text().drag, card: true });
+  for (const [k, rect] of l.close.entries()) await box(ALIGN[SLOTS + k], rect, { text: k ? "Exit" : "X" });
   await show(NOTE.name, centred(onScreen(a, l.note), NOTE.width * z), sized(NOTE, z), { ...noteData(z), align: true });
   render();
 }
@@ -485,11 +494,9 @@ async function endAlign(keep) {
   if (keep && !unsaved) {
     const was = layoutFor(a);
     const f = (x, y) => [(x - a.x) / a.width, (y - a.y) / a.height];
-    const cards = was.cards.map((c, i) => (rects[i] ? f(rects[i].x + rects[i].width / 2, rects[i].y) : c));
-    const close = was.close.map((box, k) => {
-      const r = rects[SLOTS + k];
-      return r ? [...f(r.x, r.y), ...f(r.x + r.width, r.y + r.height)] : box;
-    });
+    const rect = (r, was) => (r ? [...f(r.x, r.y), ...f(r.x + r.width, r.y + r.height)] : was);
+    const cards = was.cards.map((c, i) => rect(rects[i], c));
+    const close = was.close.map((c, k) => rect(rects[SLOTS + k], c));
     const n = rects[SLOTS + 2];
     layouts[ratioKey(a)] = { cards, close, note: n ? f(n.x + n.width / 2, n.y) : was.note, size: `${a.width}×${a.height}` };
     await a2.storage.set("layouts", layouts).catch(() => {});
@@ -584,12 +591,23 @@ $(".lang select").addEventListener("change", (e) => {
   a2.storage.set("lang", pickedLang).catch(() => {});
   setLang();
 });
+$(".label-at select").addEventListener("change", (e) => {
+  labelAt = LABEL_AT.includes(e.target.value) ? e.target.value : "under";
+  a2.storage.set("labelAt", labelAt).catch(() => {});
+  sent.fill(null); // placed again
+  refresh();
+});
 setInterval(render, 30_000);
 
 (async () => {
   key = (await a2.storage.get("last").catch(() => null)) || null;
   if (key) await load(key);
   layouts = (await a2.storage.get("layouts").catch(() => null)) || {};
+  // Before 0.1.0 a card was its label's middle and top: those go.
+  for (const [k, l] of Object.entries(layouts)) if (l.cards?.[0]?.length !== 4) delete layouts[k];
+  const savedAt = await a2.storage.get("labelAt").catch(() => null);
+  labelAt = LABEL_AT.includes(savedAt) ? savedAt : "under";
+  $(".label-at select").value = labelAt;
   const savedLang = await a2.storage.get("lang").catch(() => null);
   pickedLang = savedLang === "tr" ? "tr" : "";
   $(".lang select").value = pickedLang;

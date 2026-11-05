@@ -17,6 +17,7 @@ const MP_UI = {
     reset: "Reset to estimate", alignedAt: (ratio, size) => `${ratio} · aligned at ${size}`,
     general: "General", noteClosed: "Tell me when the list refreshes even while the game is closed",
     language: "Language", sameAsMeter: "Same as the meter",
+    labelAt: "Label", under: "under the card", bottom: "on the card, bottom", middle: "on the card, middle", top: "on the card, top",
     card: "card", drag: "drag", noteTitle: "Merchant refreshed", noteSub: "New items at the Black Cloud Merchant",
   },
   ko: {
@@ -35,6 +36,7 @@ const MP_UI = {
     reset: "추정값으로 되돌리기", alignedAt: (ratio, size) => `${ratio} · ${size}에서 맞춤`,
     general: "일반", noteClosed: "게임이 꺼져 있어도 목록 갱신 알림 표시",
     language: "언어", sameAsMeter: "미터와 같게",
+    labelAt: "라벨 위치", under: "카드 아래", bottom: "카드 안 아래쪽", middle: "카드 안 가운데", top: "카드 안 위쪽",
     card: "카드", drag: "끌기", noteTitle: "상인 목록 갱신", noteSub: "상인에게 새 상품이 있습니다",
   },
   ja: {
@@ -53,6 +55,7 @@ const MP_UI = {
     reset: "推定に戻す", alignedAt: (ratio, size) => `${ratio} · ${size} で調整`,
     general: "一般", noteClosed: "ゲームを閉じていてもリストの更新を知らせる",
     language: "言語", sameAsMeter: "メーターと同じ",
+    labelAt: "ラベルの位置", under: "カードの下", bottom: "カード内の下", middle: "カード内の中央", top: "カード内の上",
     card: "カード", drag: "ドラッグ", noteTitle: "商人の品が更新", noteSub: "商人に新しい商品があります",
   },
   de: {
@@ -71,6 +74,7 @@ const MP_UI = {
     reset: "Auf Schätzung zurücksetzen", alignedAt: (ratio, size) => `${ratio} · ausgerichtet bei ${size}`,
     general: "Allgemein", noteClosed: "Auch bei geschlossenem Spiel melden, wenn die Liste wechselt",
     language: "Sprache", sameAsMeter: "Wie der Meter",
+    labelAt: "Etikett", under: "unter der Karte", bottom: "auf der Karte, unten", middle: "auf der Karte, Mitte", top: "auf der Karte, oben",
     card: "Karte", drag: "ziehen", noteTitle: "Händler erneuert", noteSub: "Neue Waren beim Händler",
   },
   fr: {
@@ -89,6 +93,7 @@ const MP_UI = {
     reset: "Revenir à l'estimation", alignedAt: (ratio, size) => `${ratio} · aligné en ${size}`,
     general: "Général", noteClosed: "Prévenir quand la liste change, même jeu fermé",
     language: "Langue", sameAsMeter: "Comme le compteur",
+    labelAt: "Étiquette", under: "sous la carte", bottom: "sur la carte, en bas", middle: "sur la carte, au milieu", top: "sur la carte, en haut",
     card: "carte", drag: "glisser", noteTitle: "Marchand renouvelé", noteSub: "Nouveaux articles chez le marchand",
   },
   es: {
@@ -107,6 +112,7 @@ const MP_UI = {
     reset: "Volver a la estimación", alignedAt: (ratio, size) => `${ratio} · alineado a ${size}`,
     general: "General", noteClosed: "Avisar cuando cambie la lista aunque el juego esté cerrado",
     language: "Idioma", sameAsMeter: "Igual que el medidor",
+    labelAt: "Etiqueta", under: "bajo la carta", bottom: "en la carta, abajo", middle: "en la carta, en medio", top: "en la carta, arriba",
     card: "carta", drag: "arrastrar", noteTitle: "Mercader renovado", noteSub: "El mercader tiene artículos nuevos",
   },
   pt: {
@@ -125,6 +131,7 @@ const MP_UI = {
     reset: "Voltar à estimativa", alignedAt: (ratio, size) => `${ratio} · alinhado em ${size}`,
     general: "Geral", noteClosed: "Avisar quando a lista mudar mesmo com o jogo fechado",
     language: "Idioma", sameAsMeter: "Igual ao medidor",
+    labelAt: "Etiqueta", under: "abaixo do cartão", bottom: "no cartão, embaixo", middle: "no cartão, no meio", top: "no cartão, em cima",
     card: "carta", drag: "arrastar", noteTitle: "Mercador renovado", noteSub: "O mercador tem itens novos",
   },
   ru: {
@@ -143,6 +150,7 @@ const MP_UI = {
     reset: "Вернуть примерное", alignedAt: (ratio, size) => `${ratio} · выровнено при ${size}`,
     general: "Общие", noteClosed: "Сообщать о смене списка, даже когда игра закрыта",
     language: "Язык", sameAsMeter: "Как в счётчике",
+    labelAt: "Метка", under: "под карточкой", bottom: "на карточке, внизу", middle: "на карточке, посередине", top: "на карточке, вверху",
     card: "карточка", drag: "тяните", noteTitle: "Товары обновились", noteSub: "У торговца новые товары",
   },
   "zh-Hant": {
@@ -161,6 +169,7 @@ const MP_UI = {
     reset: "恢復預估", alignedAt: (ratio, size) => `${ratio} · 在 ${size} 對齊`,
     general: "一般", noteClosed: "遊戲關閉時也通知清單更新",
     language: "語言", sameAsMeter: "與計量器相同",
+    labelAt: "標籤位置", under: "卡片下方", bottom: "卡片內底部", middle: "卡片內中間", top: "卡片內頂部",
     card: "卡片", drag: "拖曳", noteTitle: "商人已更新", noteSub: "商人有新商品",
   },
   "zh-Hans": {
@@ -179,6 +188,7 @@ const MP_UI = {
     reset: "恢复预估", alignedAt: (ratio, size) => `${ratio} · 在 ${size} 对齐`,
     general: "常规", noteClosed: "游戏关闭时也通知列表更新",
     language: "语言", sameAsMeter: "与计量器相同",
+    labelAt: "标签位置", under: "卡片下方", bottom: "卡片内底部", middle: "卡片内中间", top: "卡片内顶部",
     card: "卡片", drag: "拖动", noteTitle: "商人已更新", noteSub: "商人有新商品",
   },
   tr: {
@@ -197,6 +207,7 @@ const MP_UI = {
     reset: "Tahmine dön", alignedAt: (ratio, size) => `${ratio} · ${size} çözünürlükte hizalandı`,
     general: "Genel", noteClosed: "Oyun kapalıyken de liste yenilenince haber ver",
     language: "Dil", sameAsMeter: "Meter ile aynı",
+    labelAt: "Etiket", under: "kartın altında", bottom: "kartın üstünde, altta", middle: "kartın üstünde, ortada", top: "kartın üstünde, üstte",
     card: "kart", drag: "sürükle", noteTitle: "Tüccar yenilendi", noteSub: "Black Cloud Merchant'ta yeni ürünler var",
   },
 };

@@ -26,6 +26,6 @@ h2 { margin: 0 0 4px; font-size: 13px; }
 .saved li { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .saved li.current { color: #e8e8ee; }
 .saved .forget { padding: 2px 8px; font-size: 11px; }
-.lang { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 10px; font-size: 12px; color: #9a9aa8; }
+.lang, .label-at { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 10px; font-size: 12px; color: #9a9aa8; }
 .note-closed { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #9a9aa8; }
 .meter { font-size: 12px; color: #e0b050; }
