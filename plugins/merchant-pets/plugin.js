@@ -34,6 +34,15 @@ const CARDS = [[383, 487], [614, 539], [844, 558], [1074.5, 558], [1305, 539], [
 // The shop's own close buttons, X and Exit (left, top, right, bottom), and the
 // side of the screen each keeps to.
 const CLOSE = [{ box: [1840, 0, 1920, 80], side: "right" }, { box: [130, 15, 335, 60], side: "left" }];
+// The player's fit of the measured cards (Align): the grid of them scaled by
+// k about the 1920x1080 shop's middle and moved by t, in its px. The game
+// scales the shop as one, so a fit made at one size holds at every size.
+const FIT0 = { kx: 1, ky: 1, tx: 0, ty: 0 };
+let fit = FIT0;
+let cardMarks = MARKS; // the player's tick and eye (Align), on every card
+const fitted = (x, y) => [REF.width / 2 + (x - REF.width / 2) * fit.kx + fit.tx, REF.height / 2 + (y - REF.height / 2) * fit.ky + fit.ty];
+// Card `i` in the 1920x1080 shop, unfitted: left, top, right, bottom.
+const cardRef = (i) => [CARDS[i][0] - CARD.width / 2, CARDS[i][1] - CARD.body, CARDS[i][0] + CARD.width / 2, CARDS[i][1] + CARD.height - CARD.body];
 // The list changes every hour, on the hour: with the shop shut, a note at the
 // top of the screen says so (a click on it, or 20 s, takes it away), while you
 // play, or always if the player wants (Settings). The interval is learned
@@ -70,38 +79,46 @@ let noteClosed = true; // the refresh note while the game is closed too (Setting
 let layouts = {}; // aspect ratio ("1.78") -> the player's layout (see `guess`)
 let aligning = false; // the boxes are out to be dragged into place
 const alignSent = {}; // what each widget shows while aligning
-let alignMarks = MARKS; // where the tick and the eye are on every card, while aligning
-// While aligning, each card's box in its window: left, top, width, height in
-// CSS px. The window is the box and MARGIN around it (a widget is 800 px at
-// most): the box is sized in it, so the pointer stays on it; moved, the window
-// goes. Let go, the window comes round the box again.
+// While aligning, each card's box is drawn in a window of its own: the box
+// and MARGIN round it (a widget is 800 px at most), kept in the game's area.
+// The plugin puts every window where it works out (it never asks where one
+// is: KWin may not have done moving it). A box moved or sized in its window
+// changes the fit, and every card is drawn again from it.
 const MARGIN = 120;
-let alignRects = [];
-let alignWork = Promise.resolve(); // the boxes' moves, in turn
-// Card `i`'s box on screen: left and top in screen px, width and height in
-// CSS px; or null.
-async function boxOnScreen(i) {
-  const r = await a2.widgets.where(`card-${i}`).catch(() => null);
-  const [x, y, w, h] = alignRects[i];
-  return r && { x: r.x + x * devicePixelRatio, y: r.y + y * devicePixelRatio, w, h };
+let alignWork = Promise.resolve(); // the boxes' changes, in turn
+let alignWin = []; // each card's window: its top left, in screen px
+let fitWas = { fit: FIT0, marks: MARKS }; // to go back to on Cancel
+function cardWindow(a, [x0, y0, x1, y1]) {
+  const dpr = devicePixelRatio, m = MARGIN * dpr;
+  const b = { x: a.x + x0 * a.width, y: a.y + y0 * a.height, w: (x1 - x0) * a.width, h: (y1 - y0) * a.height };
+  const wx0 = Math.round(Math.max(a.x, b.x - m)), wy0 = Math.round(Math.max(a.y, b.y - m));
+  const wx1 = Math.min(a.x + a.width, b.x + b.w + m), wy1 = Math.min(a.y + a.height, b.y + b.h + m);
+  return {
+    at: { x: wx0, y: wy0 },
+    size: { width: Math.round((wx1 - wx0) / dpr), height: Math.round((wy1 - wy0) / dpr) },
+    rect: [(b.x - wx0) / dpr, (b.y - wy0) / dpr, b.w / dpr, b.h / dpr],
+  };
 }
-// Card `i`'s window round a box at `b` (as boxOnScreen gives it); where the
-// box is drawn in it from where the window really is, once KWin is done with
-// it (it may move a window that grew, keep one on the screen, or not move it:
-// the box stays where it is on screen either way).
-const SETTLE = 150;
-async function boxAt(i, b) {
-  const name = `card-${i}`, dpr = devicePixelRatio;
-  const w = Math.max(20, b.w), h = Math.max(20, b.h);
-  const at = { x: Math.round(b.x - MARGIN * dpr), y: Math.round(b.y - MARGIN * dpr) };
-  await placeOpen(name, at, { width: Math.round(w + 2 * MARGIN), height: Math.round(h + 2 * MARGIN) });
-  await new Promise((r) => setTimeout(r, SETTLE));
-  await a2.widgets.place(name, at).catch(() => {});
-  await new Promise((r) => setTimeout(r, SETTLE));
-  const r = await a2.widgets.where(name).catch(() => null);
-  alignRects[i] = r && (r.x || r.y) ? [(b.x - r.x) / dpr, (b.y - r.y) / dpr, w, h] : [MARGIN, MARGIN, w, h];
-  alignSent[name] = { ...alignSent[name], rect: alignRects[i], marks: alignMarks };
-  a2.widgets.send(name, alignSent[name]).catch(() => {});
+async function drawCards() {
+  const a = gameArea(), l = layoutFor(a);
+  await Promise.all(l.cards.map(async (c, i) => {
+    const name = `card-${i}`, w = cardWindow(a, c);
+    alignWin[i] = w.at;
+    alignSent[name] = { ...alignSent[name], rect: w.rect, marks: cardMarks };
+    await placeOpen(name, w.at, w.size);
+    a2.widgets.send(name, alignSent[name]).catch(() => {});
+  }));
+}
+// Card `i`'s box now at `r` in its window: the fit that puts it there.
+function refit(i, r) {
+  const a = gameArea(), dpr = devicePixelRatio, s = Math.min(a.width / REF.width, a.height / REF.height);
+  const ref = (X, Y) => [REF.width / 2 + (X - a.x - a.width / 2) / s, REF.height / 2 + (Y - a.y - a.height / 2) / s];
+  const w = alignWin[i];
+  const [X0, Y0] = ref(w.x + r[0] * dpr, w.y + r[1] * dpr);
+  const [X1, Y1] = ref(w.x + (r[0] + r[2]) * dpr, w.y + (r[1] + r[3]) * dpr);
+  const [x0, y0, x1, y1] = cardRef(i);
+  const kx = (X1 - X0) / (x1 - x0), ky = (Y1 - Y0) / (y1 - y0);
+  fit = { kx, ky, tx: X0 - REF.width / 2 - (x0 - REF.width / 2) * kx, ty: Y0 - REF.height / 2 - (y0 - REF.height / 2) * ky };
 }
 let noteOn = false;
 let noteTimer = 0;
@@ -329,7 +346,10 @@ const gameArea = () => area || { x: 0, y: 0, ...REF };
 function guess(a) {
   const f = (p) => [(p.x - a.x) / a.width, (p.y - a.y) / a.height];
   return {
-    cards: CARDS.map(([x, y]) => [...f(at(a, x - CARD.width / 2, y - CARD.body)), ...f(at(a, x + CARD.width / 2, y + CARD.height - CARD.body))]),
+    cards: CARDS.map((_, i) => {
+      const [x0, y0, x1, y1] = cardRef(i);
+      return [...f(at(a, ...fitted(x0, y0))), ...f(at(a, ...fitted(x1, y1)))];
+    }),
     close: CLOSE.map(({ box: [l, t, r, b], side }) => [...f(at(a, l, t, side, true)), ...f(at(a, r, b, side, true))]),
     note: f(at(a, REF.width / 2, NOTE.top, "middle", true)),
   };
@@ -337,7 +357,11 @@ function guess(a) {
 const ratioKey = (a) => (a.width / a.height).toFixed(2);
 const RATIO_NAMES = { "1.78": "16:9", "1.60": "16:10", "2.33": "21:9", "2.37": "21:9", "2.39": "21:9", "3.56": "32:9", "1.33": "4:3", "1.25": "5:4" };
 const ratioName = (k) => RATIO_NAMES[k] || k;
-const layoutFor = (a) => layouts[ratioKey(a)] || guess(a);
+// The cards from the fit; X, Exit and the note as aligned for this ratio.
+function layoutFor(a) {
+  const g = guess(a), mine = layouts[ratioKey(a)];
+  return { ...g, close: mine?.close || g.close, note: mine?.note || g.note, marks: cardMarks };
+}
 // Where a card's label goes (Settings): under the card's sides (on its point),
 // or on it at its bottom, middle or top; its top middle in screen pixels, for
 // zoom `z`.
@@ -459,25 +483,20 @@ a2.on("widget-message", ({ name, data }) => {
   if (aligning) {
     if (data?.hello && alignSent[name]) a2.widgets.send(name, alignSent[name]).catch(() => {});
     if (!alignSent[name]?.card || !(data?.rect || data?.marks)) return;
-    // A card sized ({ rect }): every card's edges move as its did, each
-    // window round its box again. Its tick or eye moved or sized: every card
-    // the same.
+    // A card moved or sized ({ rect }): the fit from it, every card drawn
+    // again. Its tick or eye ({ marks }): every card the same.
     const i = Number(name.split("-")[1]);
     alignWork = alignWork.then(async () => {
-      if (data.marks) alignMarks = data.marks;
-      const r = data.rect;
-      if (!r) {
-        for (let j = 0; j < SLOTS; j++) {
-          const n = `card-${j}`;
-          alignSent[n] = { ...alignSent[n], marks: alignMarks };
-          if (j !== i) a2.widgets.send(n, alignSent[n]).catch(() => {});
-        }
-        return;
+      if (data.marks) cardMarks = data.marks;
+      if (data.rect) {
+        refit(i, data.rect);
+        return drawCards();
       }
-      const was = alignRects[i], dpr = devicePixelRatio;
-      const d = [r[0] - was[0], r[1] - was[1], r[0] + r[2] - was[0] - was[2], r[1] + r[3] - was[1] - was[3]];
-      const boxes = await Promise.all(alignRects.map((_, j) => boxOnScreen(j)));
-      await Promise.all(boxes.map((b, j) => b && boxAt(j, { x: b.x + d[0] * dpr, y: b.y + d[1] * dpr, w: b.w + d[2] - d[0], h: b.h + d[3] - d[1] })));
+      for (let j = 0; j < SLOTS; j++) {
+        const n = `card-${j}`;
+        alignSent[n] = { ...alignSent[n], marks: cardMarks };
+        if (j !== i) a2.widgets.send(n, alignSent[n]).catch(() => {});
+      }
     });
     return;
   }
@@ -565,13 +584,9 @@ async function startAlign() {
     const size = { width: Math.round(((x1 - x0) * a.width) / devicePixelRatio), height: Math.round(((y1 - y0) * a.height) / devicePixelRatio) };
     await show(name, { x: Math.round(from.x), y: Math.round(from.y) }, size, { ...data, exit: true, align: true });
   };
-  alignMarks = l.marks || MARKS;
-  const dpr = devicePixelRatio;
-  alignRects = l.cards.map(([x0, y0, x1, y1]) => [(x0 * a.width) / dpr, (y0 * a.height) / dpr, ((x1 - x0) * a.width) / dpr, ((y1 - y0) * a.height) / dpr]);
-  alignWork = Promise.all(alignRects.map(([x, y, w, h], i) => {
-    alignSent[`card-${i}`] = { text: `${text().card} ${i + 1}`, sub: text().drag, card: true, exit: true, align: true };
-    return boxAt(i, { x: a.x + x * dpr, y: a.y + y * dpr, w, h });
-  }));
+  fitWas = { fit, marks: cardMarks };
+  for (let i = 0; i < SLOTS; i++) alignSent[`card-${i}`] = { text: `${text().card} ${i + 1}`, sub: text().drag, card: true, exit: true, align: true };
+  alignWork = drawCards();
   await alignWork;
   for (const [k, rect] of l.close.entries()) await box(ALIGN[SLOTS + k], rect, { text: k ? "Exit" : "X" });
   await show(NOTE.name, centred(onScreen(a, l.note), NOTE.width * z), sized(NOTE, z), { ...noteData(z), align: true });
@@ -581,7 +596,6 @@ async function endAlign(keep) {
   if (!aligning) return;
   await alignWork;
   const a = gameArea();
-  const boxes = keep ? await Promise.all(alignRects.map((_, i) => boxOnScreen(i))) : [];
   const rects = keep ? await Promise.all(ALIGN.map((name) => a2.widgets.where(name).catch(() => null))) : [];
   // A meter that cannot see where its windows are (before 2.0.89 on KDE
   // Wayland) says the same spot, the top left, for every one: saving that
@@ -591,16 +605,12 @@ async function endAlign(keep) {
     const was = layoutFor(a);
     const f = (x, y) => [(x - a.x) / a.width, (y - a.y) / a.height];
     const rect = (r, was) => (r ? [...f(r.x, r.y), ...f(r.x + r.width, r.y + r.height)] : was);
-    const dpr = devicePixelRatio;
-    const cards = was.cards.map((c, i) => {
-      const b = boxes[i];
-      return b ? [...f(b.x, b.y), ...f(b.x + b.w * dpr, b.y + b.h * dpr)] : c;
-    });
     const close = was.close.map((c, k) => rect(rects[SLOTS + k], c));
     const n = rects[SLOTS + 2];
-    layouts[ratioKey(a)] = { v: 2, cards, marks: alignMarks, close, note: n ? f(n.x + n.width / 2, n.y) : was.note, size: `${a.width}×${a.height}` };
+    layouts[ratioKey(a)] = { v: 2, close, note: n ? f(n.x + n.width / 2, n.y) : was.note, size: `${a.width}×${a.height}` };
     await a2.storage.set("layouts", layouts).catch(() => {});
-  }
+    await a2.storage.set("fit", { ...fit, marks: cardMarks }).catch(() => {});
+  } else ({ fit, marks: cardMarks } = fitWas); // as it was
   for (const name of ALIGN) await a2.widgets.close(name).catch(() => {});
   aligning = false;
   sent.fill(null);
@@ -609,6 +619,9 @@ async function endAlign(keep) {
 async function forget(k) {
   delete layouts[k];
   await a2.storage.set("layouts", layouts).catch(() => {});
+  fit = FIT0; // the cards' fit, the same at every size, goes too
+  cardMarks = MARKS;
+  await a2.storage.set("fit", null).catch(() => {});
   watchClose(); // the estimate's X and Exit again
   render();
 }
@@ -703,8 +716,13 @@ setInterval(render, 30_000);
   key = (await a2.storage.get("last").catch(() => null)) || null;
   if (key) await load(key);
   layouts = (await a2.storage.get("layouts").catch(() => null)) || {};
-  // Layouts from before the cards were whole (v 2) go.
+  // Layouts from before the cards were whole (v 2) go; the cards come from the fit.
   for (const [k, l] of Object.entries(layouts)) if (l.v !== 2) delete layouts[k];
+  const saved = await a2.storage.get("fit").catch(() => null);
+  const num = (v, lo, hi) => typeof v === "number" && v >= lo && v <= hi;
+  if (saved && num(saved.kx, 0.5, 2) && num(saved.ky, 0.5, 2) && num(saved.tx, -500, 500) && num(saved.ty, -500, 500)) fit = { kx: saved.kx, ky: saved.ky, tx: saved.tx, ty: saved.ty };
+  const ok = (m) => Array.isArray(m) && m.length === 4 && m.every((v) => num(v, -1, 2));
+  if (ok(saved?.marks?.tick) && ok(saved?.marks?.preview)) cardMarks = { tick: saved.marks.tick, preview: saved.marks.preview };
   const savedAt = await a2.storage.get("labelAt").catch(() => null);
   labelAt = LABEL_AT.includes(savedAt) ? savedAt : "under";
   $(".label-at select").value = labelAt;

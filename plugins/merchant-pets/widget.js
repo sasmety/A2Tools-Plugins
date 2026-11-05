@@ -3,11 +3,10 @@
 // the label's own box takes the mouse, so the card above stays clickable.
 //
 // A card while aligning: its window is the box (drawn at `rect`) and a margin
-// round it. Its middle drags the window; an edge or corner sizes the box in
-// it (the pointer stays on the window); its tick and eye are dragged and
-// sized in it the same. Sizing the card keeps them where they are on screen.
-// Let go, the plugin hears it, does the same to every card and brings the
-// window round the box again.
+// round it. The box is dragged by its middle and sized from an edge or corner
+// in it (the pointer stays on the window); its tick and eye the same. Sizing
+// the card keeps them where they are on screen. Let go, the plugin hears it,
+// fits every card to it and draws each window round its box again.
 const box = document.querySelector(".label");
 let rect = null; // the card's box: left, top, width, height (CSS px of the window)
 let marks = null; // its tick and eye: left, top, right, bottom as fractions of it
@@ -82,7 +81,6 @@ box.addEventListener("mousedown", (e) => {
   if (!box.classList.contains("align")) return a2.widget.post({ dismiss: true }).catch(() => {});
   if (!rect) return a2.widget.drag().catch(() => {}); // X, Exit, the note: their windows
   const hit = hitAt(e.clientX, e.clientY);
-  if (hit.what === "card" && !hit.dir) return a2.widget.drag().catch(() => {});
   const start = rect;
   const startMarks = marks && { tick: toPx(start, marks.tick), preview: toPx(start, marks.preview) };
   dragging = true;
