@@ -1,0 +1,164 @@
+{
+  "id": "merchant-pets",
+  "name": "Merchant Pets",
+  "version": "0.1.0",
+  "apiVersion": 2,
+  "author": "sasmety",
+  "description": "Black Cloud Merchant: under each pet card, your souls toward its last level (x/105), its genus and where its souls drop, and IMPORTANT on pets only dungeons, chests or the merchant give (RARE on ones few monsters drop). You align the labels once per screen shape. Esc and the shop's close buttons hide them with meter 2.0.89 or newer.",
+  "permissions": [
+    "storage",
+    "window",
+    "widgets",
+    "events:character",
+    "events:input",
+    "decoder:pet-list",
+    "decoder:soul-gained",
+    "decoder:level-up",
+    "decoder:pet-unlocked",
+    "decoder:shop-list",
+    "decoder:own-position",
+    "decoder:npc-talk",
+    "decoder:zone"
+  ],
+  "decoders": [
+    {
+      "name": "pet-list",
+      "opcode": "00 90",
+      "fields": [
+        { "type": "skip:4" },
+        {
+          "name": "levels",
+          "type": "list",
+          "count": "varint",
+          "fields": [
+            { "name": "pet", "type": "u32" },
+            { "type": "skip:4" },
+            { "name": "level", "type": "u32" }
+          ]
+        },
+        {
+          "name": "points",
+          "type": "list",
+          "count": "varint",
+          "fields": [
+            { "name": "pet", "type": "u32" },
+            { "name": "points", "type": "u32" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "soul-gained",
+      "opcode": "0D 90",
+      "immediate": true,
+      "fields": [
+        {
+          "name": "souls",
+          "type": "list",
+          "count": "u8",
+          "fields": [
+            { "name": "pet", "type": "u32" },
+            { "name": "amount", "type": "u32" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "level-up",
+      "opcode": "14 90",
+      "immediate": true,
+      "fields": [
+        { "type": "skip:2" },
+        { "name": "pet", "type": "u32" },
+        { "name": "level", "type": "u32" }
+      ]
+    },
+    {
+      "name": "pet-unlocked",
+      "opcode": "09 90",
+      "immediate": true,
+      "fields": [
+        { "type": "skip:2" },
+        { "name": "pet", "type": "u32" },
+        { "name": "level", "type": "u32" }
+      ]
+    },
+    {
+      "name": "shop-list",
+      "opcode": "91 56",
+      "immediate": true,
+      "fields": [
+        { "name": "head", "type": "u16" },
+        { "name": "p0", "type": "u32" },
+        { "name": "i0", "type": "u32" },
+        { "type": "skip:27" },
+        { "name": "p1", "type": "u32" },
+        { "name": "i1", "type": "u32" },
+        { "type": "skip:26" },
+        { "name": "p2", "type": "u32" },
+        { "name": "i2", "type": "u32" },
+        { "type": "skip:26" },
+        { "name": "p3", "type": "u32" },
+        { "name": "i3", "type": "u32" },
+        { "type": "skip:26" },
+        { "name": "p4", "type": "u32" },
+        { "name": "i4", "type": "u32" },
+        { "type": "skip:27" },
+        { "name": "p5", "type": "u32" },
+        { "name": "i5", "type": "u32" },
+        { "type": "skip:26" },
+        { "name": "p6", "type": "u32" },
+        { "name": "i6", "type": "u32" },
+        { "type": "skip:26" },
+        { "name": "p7", "type": "u32" },
+        { "name": "i7", "type": "u32" },
+        { "type": "skip:26" },
+        { "name": "p8", "type": "u32" },
+        { "name": "i8", "type": "u32" },
+        { "type": "skip:27" },
+        { "name": "p9", "type": "u32" },
+        { "name": "i9", "type": "u32" },
+        { "type": "skip:26" },
+        { "name": "refreshAt", "type": "u64" }
+      ]
+    },
+    {
+      "name": "own-position",
+      "opcode": "2A 38",
+      "self": "source",
+      "fields": [
+        { "name": "source", "type": "varint" },
+        { "name": "one", "type": "u8" },
+        { "name": "kind", "type": "u8" },
+        { "name": "seq", "type": "varint" },
+        { "type": "skip:20" },
+        { "name": "target", "type": "varint" },
+        { "name": "p", "type": "u8" },
+        { "name": "q", "type": "u8" },
+        { "name": "x", "type": "u32" },
+        { "name": "y", "type": "u32" },
+        { "name": "z", "type": "u32" }
+      ]
+    },
+    {
+      "name": "npc-talk",
+      "opcode": "61 E2",
+      "immediate": true,
+      "fields": [
+        { "name": "a", "type": "u16" }
+      ]
+    },
+    {
+      "name": "zone",
+      "opcode": "21 36",
+      "immediate": true,
+      "fields": [
+        { "type": "skip:4" },
+        { "name": "map", "type": "u32" }
+      ]
+    }
+  ],
+  "ui": {
+    "panel": { "width": 360, "height": 420 }
+  }
+}

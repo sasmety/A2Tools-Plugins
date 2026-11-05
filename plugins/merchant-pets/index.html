@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Merchant Pets</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <input type="radio" name="tab" id="t-shop" checked hidden />
+  <input type="radio" name="tab" id="t-setup" hidden />
+  <nav class="tabs"><label for="t-shop" data-t="tabShop">Merchant</label><label for="t-setup" data-t="tabSettings">Settings</label></nav>
+  <div class="shop">
+  <h1 data-t="title">Black Cloud Merchant</h1>
+  <p class="refresh"></p>
+  <div class="list"></div>
+  <p class="legend"><b class="important" data-t="important">IMPORTANT</b> <span data-t="legendImportant"></span> · <b class="hard" data-t="hard">RARE</b> <span data-t="legendRare"></span> · x/105 <span data-t="legendCount"></span></p>
+  <p class="meter" hidden></p>
+  </div>
+  <div class="setup">
+  <section class="layout">
+    <h2 data-t="layout">Layout</h2>
+    <p class="ratio"></p>
+    <div class="buttons"><button type="button" class="align"></button><button type="button" class="cancel" data-t="cancel" hidden>Cancel</button></div>
+    <ul class="saved"></ul>
+  </section>
+  <section class="settings">
+    <h2 data-t="general">General</h2>
+    <label class="note-closed"><input type="checkbox" checked /> <span data-t="noteClosed"></span></label>
+    <label class="lang"><span data-t="language">Language</span> <select><option value="" data-t="sameAsMeter">Same as the meter</option><option value="tr">Türkçe</option></select></label>
+  </section>
+  </div>
+  <script src="/_sdk/a2.js"></script>
+  <script src="i18n.js"></script>
+  <script src="data.js"></script>
+  <script src="plugin.js"></script>
+</body>
+</html>

@@ -1,0 +1,24 @@
+html, body { margin: 0; background: transparent; overflow: hidden; }
+body { visibility: hidden; } /* nothing until it is told what to show (made ahead, empty) */
+:root { --z: 1; } /* the plugin's zoom: as big as the game draws its interface */
+/* Centred in the window, so every label sits mid-card whatever its length. */
+body { display: flex; justify-content: center; }
+.label { box-sizing: border-box; max-width: calc(148px * var(--z)); height: calc(38px * var(--z)); padding: 0 calc(8px * var(--z));
+  border-radius: calc(8px * var(--z)); display: flex; flex-direction: column; justify-content: center; align-items: center; gap: calc(1px * var(--z));
+  background: rgba(10, 10, 16, 0.85); border: 1px solid rgba(255, 255, 255, 0.25);
+  font-family: system-ui, sans-serif; color: #fff; white-space: nowrap; user-select: none; }
+.top { display: flex; gap: calc(6px * var(--z)); align-items: baseline; font: 700 calc(13px * var(--z))/1 system-ui, sans-serif; }
+.t { font-size: calc(11px * var(--z)); }
+.t:empty { display: none; } /* no tag: no gap beside the count, so it stays centred */
+.sub { max-width: calc(130px * var(--z)); overflow: hidden; text-overflow: ellipsis; font-size: calc(10.5px * var(--z)); line-height: 1.1; color: #b9b9c6; }
+.label.important { border-color: #ff6b5e; }
+.label.hard { border-color: #f4b740; }
+.label.done { opacity: 0.55; }
+.label.toast { max-width: none; height: calc(46px * var(--z)); padding: 0 calc(16px * var(--z)); border-color: #8fc2ff; cursor: pointer; }
+.toast .top { font-size: calc(15px * var(--z)); }
+.toast .sub { max-width: none; font-size: calc(12px * var(--z)); }
+.important .t { color: #ff6b5e; }
+.hard .t { color: #f4b740; }
+.label.align { min-width: 100%; cursor: move; border-style: dashed; }
+/* X and Exit while aligning: the whole box the click counts in. */
+.label.exit { width: 100vw; height: 100vh; max-width: none; padding: 0; border: 2px dashed #ff6b5e; background: rgba(255, 107, 94, 0.18); }
