@@ -143,6 +143,7 @@ onPets("decoded:soul-gained", (st, data) => {
   // other soul: you're fighting, not shopping.
   const listed = new Set((shop?.rows || []).map((r) => r.pet));
   if (!(data.souls || []).every(({ pet }) => listed.has(pet))) hideLabels();
+  else buying = false; // bought: the labels come back, with the new count
 });
 onPets("decoded:level-up", (st, { pet, level }) => {
   // The game takes the levels' cost from the pet's souls; already levelled
@@ -155,6 +156,7 @@ onPets("decoded:level-up", (st, { pet, level }) => {
 // A pet from a chest (09 90): yours now, at its level, with the souls it had.
 onPets("decoded:pet-unlocked", (st, { pet, level }) => {
   if ((st.levels[pet] || 0) < level) st.levels[pet] = level;
+  buying = false; // bought (a pet new to you)
 });
 
 a2.on("character", (c) => queued(async () => {
@@ -181,6 +183,7 @@ a2.on("decoded:shop-list", (d) => {
   every = learnEvery(shop?.refreshAt, d.refreshAt, Date.now()) || every;
   shop = { rows, refreshAt: d.refreshAt };
   shown = true;
+  buying = false; // another tab, or the list again
   if (noteOn) note(false);
   scheduleNote();
   clearTimeout(hideTimer);
@@ -196,20 +199,54 @@ a2.on("decoded:own-position", (d) => {
 // Talking to an NPC (the merchant too: its list comes right after and shows them again).
 a2.on("decoded:npc-talk", () => hideLabels());
 a2.on("decoded:zone", () => hideLabels());
-// Esc, or a click on the shop's X or Exit (its zones), while the labels show.
+// A click on a card opens the shop's purchase window over the labels: they
+// step aside until it closes (Esc, its Cancel or X, or the pet's souls of a
+// purchase), the shop still open.
+let buying = false;
+function setBuying(on) {
+  if (buying === on) return;
+  buying = on;
+  refresh();
+}
+// The zones the meter is asked to watch, always all of them so each keeps
+// its index: the shop's X and Exit, each card, then the purchase window's
+// Cancel, X and Purchase.
+const Z = { cards: 2, cancel: 2 + SLOTS, purchase: 4 + SLOTS };
+// Esc, or a click in a zone, while the labels show.
 a2.on("input", (e) => {
-  if (shown && !aligning && (e.key === "Escape" || e.zone != null)) hideLabels();
+  if (!shown || aligning) return;
+  const z = e.zone;
+  if (buying) {
+    if (e.key === "Escape" || z === Z.cancel || z === Z.cancel + 1) setBuying(false);
+    // Bought: a pet's souls come at once (and bring the labels back); a mount
+    // or a look brings none.
+    if (z === Z.purchase) setTimeout(() => setBuying(false), 600);
+  } else if (e.key === "Escape" || z === 0 || z === 1) hideLabels();
+  else if (z >= Z.cards && z < Z.cards + SLOTS) setBuying(true);
 });
-// The meter watches only while the labels show: the X and Exit boxes of this
-// ratio's layout, as zones of the game's window (in it, so the meter takes them).
+// The purchase window, measured in a 1920x1080 game (2026-11-06): in the
+// middle of the screen, its Cancel, X and Purchase buttons (left, top, right,
+// bottom). And a card: so wide, and so tall above its label's top.
+const PURCHASE = [[765, 706, 957, 746], [1284, 233, 1324, 273], [963, 706, 1155, 746]];
+const CARD = { width: 160, height: 222 };
+function zonesFor(a) {
+  const l = layoutFor(a);
+  const s = Math.min(a.width / REF.width, a.height / REF.height);
+  const f = (p) => [(p.x - a.x) / a.width, (p.y - a.y) / a.height];
+  const w = (CARD.width * s) / 2 / a.width;
+  const cards = l.cards.map(([x, y]) => [x - w, y - (CARD.height * s) / a.height, x + w, y]);
+  return [...l.close, ...cards, ...PURCHASE.map(([x0, y0, x1, y1]) => [...f(at(a, x0, y0)), ...f(at(a, x1, y1))])];
+}
+// The meter watches only while the labels show (zones of the game's window,
+// kept in it so the meter takes them; one off the window shrinks to its corner).
 function watchClose() {
   if (!canWatch()) return;
   const inside = (v) => Math.min(1, Math.max(0, v));
-  const zones = shown && !aligning
-    ? layoutFor(gameArea()).close
-        .map(([x0, y0, x1, y1]) => ({ x: inside(x0), y: inside(y0), width: inside(x1) - inside(x0), height: inside(y1) - inside(y0) }))
-        .filter((z) => z.width > 0 && z.height > 0)
-    : null;
+  const zone = ([x0, y0, x1, y1]) => {
+    const z = { x: inside(x0), y: inside(y0), width: inside(x1) - inside(x0), height: inside(y1) - inside(y0) };
+    return z.width > 0 && z.height > 0 ? z : { x: 0, y: 0, width: 1e-6, height: 1e-6 };
+  };
+  const zones = shown && !aligning ? zonesFor(gameArea()).map(zone) : null;
   const key = JSON.stringify(zones);
   if (key === watching) return;
   watching = key;
@@ -253,6 +290,7 @@ const centred = (p, width) => ({ x: Math.round(p.x - (width * devicePixelRatio) 
 function hideLabels() {
   if (!shown) return;
   shown = false;
+  buying = false;
   clearTimeout(hideTimer);
   refresh();
 }
@@ -261,7 +299,7 @@ function hideLabels() {
 function labels() {
   const st = states.get(key) || { levels: {}, points: {} };
   const out = new Array(SLOTS).fill(null);
-  if (!shown || !shop || Date.now() >= shop.refreshAt) return out;
+  if (!shown || buying || !shop || Date.now() >= shop.refreshAt) return out;
   const zoom = zoomFor(gameArea());
   for (const r of shop.rows) {
     if (!r.pet) continue; // a mount or a look: no souls to count
@@ -412,6 +450,7 @@ async function startAlign() {
   unsaved = false;
   if (noteOn) await note(false);
   shown = false;
+  buying = false;
   await refresh(); // the labels go
   aligning = true;
   const a = gameArea();
