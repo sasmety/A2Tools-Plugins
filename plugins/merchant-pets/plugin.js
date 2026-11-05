@@ -427,9 +427,9 @@ a2.on("widget-message", ({ name, data }) => {
   if (aligning) {
     if (data?.hello && alignSent[name]) a2.widgets.send(name, alignSent[name]).catch(() => {});
     if (!alignSent[name]?.card) return;
-    // A card being sized: it alone till it is let go, then every card the
-    // same. Its tick or eye moved or sized: every card the same.
-    if (data?.size) sizeCard(name, data);
+    // A drag in a card's box: it grows, then back to `size` (every card's
+    // too when it was sized). Its tick or eye moved or sized: every card the same.
+    if (data?.grow || data?.size) cardDrag(name, data);
     if (data?.marks) {
       alignMarks = data.marks;
       for (let i = 0; i < SLOTS; i++) {
@@ -530,35 +530,32 @@ async function startAlign() {
   await show(NOTE.name, centred(onScreen(a, l.note), NOTE.width * z), sized(NOTE, z), { ...noteData(z), align: true });
   render();
 }
-// A card's box sized from its grip ({ size, start, end } as it goes): only
-// the newest size is drawn, its top left kept; let go, every card takes it.
-let sizing = null; // { name, at, want, last, end, busy }
-let scaling = Promise.resolve(); // the other cards taking a size
-async function sizeCard(name, { size, start, end }) {
-  if (start) sizing = { name, at: null, want: null, last: null, end: false, busy: true };
-  const s = sizing;
-  if (!s || s.name !== name) return;
-  if (size) s.want = { width: Math.max(20, Math.round(size.width)), height: Math.max(20, Math.round(size.height)) };
-  s.end ||= !!end;
-  if (start) {
-    const r = await a2.widgets.where(name).catch(() => null);
-    s.at = r && { x: r.x, y: r.y };
-  } else if (s.busy) return; // the one drawing takes the newest
-  s.busy = true;
-  while (s.want) {
-    s.last = s.want;
-    s.want = null;
-    await a2.widgets.open(name, s.last).catch(() => {});
-    if (s.at) await a2.widgets.place(name, s.at).catch(() => {});
-  }
-  s.busy = false;
-  if (!s.end || !s.last || sizing !== s) return;
-  sizing = null;
-  scaling = Promise.all(Array.from({ length: SLOTS }, async (_, i) => {
-    const n = `card-${i}`;
-    const r = n !== name && (await a2.widgets.where(n).catch(() => null));
-    if (r) await placeOpen(n, { x: r.x, y: r.y }, s.last);
-  }));
+// A drag in a card's box ({ grow }, then { size, all }): the window grows to
+// the game's bottom right, so the pointer stays in it (it hears nothing
+// outside), and the box draws itself there as it goes. Let go, it is `size`
+// again, and with `all` every card is; each keeps its top left.
+let scaling = Promise.resolve(); // in turn, so a let-go never comes before its grow
+function cardDrag(name, { grow, size, all }) {
+  scaling = scaling.then(async () => {
+    const dpr = devicePixelRatio;
+    const topLeft = async (n) => {
+      const r = await a2.widgets.where(n).catch(() => null);
+      return r && { x: r.x, y: r.y, width: r.width / dpr, height: r.height / dpr };
+    };
+    if (grow) {
+      const r = await topLeft(name);
+      const a = gameArea();
+      if (r) await placeOpen(name, { x: r.x, y: r.y }, { width: Math.round(Math.max(r.width, (a.x + a.width - r.x) / dpr)), height: Math.round(Math.max(r.height, (a.y + a.height - r.y) / dpr)) });
+      return;
+    }
+    const want = { width: Math.max(20, Math.round(size.width)), height: Math.max(20, Math.round(size.height)) };
+    const names = all ? Array.from({ length: SLOTS }, (_, i) => `card-${i}`) : [name];
+    await Promise.all(names.map(async (n) => {
+      const r = await topLeft(n);
+      if (r) await placeOpen(n, { x: r.x, y: r.y }, want);
+    }));
+  });
+  return scaling;
 }
 async function endAlign(keep) {
   if (!aligning) return;
