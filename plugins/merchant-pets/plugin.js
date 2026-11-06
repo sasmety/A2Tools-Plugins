@@ -99,11 +99,20 @@ function cardWindow(a, [x0, y0, x1, y1]) {
     rect: [(b.x - wx0) / dpr, (b.y - wy0) / dpr, b.w / dpr, b.h / dpr],
   };
 }
+// DEBUG (temporary): what align asks of each card window, and what it got.
+const dbg = [];
+function log(e) {
+  dbg.push({ t: Date.now() % 1e6, ...e });
+  if (dbg.length > 400) dbg.shift();
+  a2.storage.set("debug", dbg).catch(() => {});
+}
 async function drawCards() {
   const a = gameArea(), l = layoutFor(a);
   await Promise.all(l.cards.map(async (c, i) => {
     const name = `card-${i}`, w = cardWindow(a, c);
     alignWin[i] = w.at;
+    log({ draw: i, at: w.at, size: w.size, rect: w.rect.map(Math.round) });
+    setTimeout(async () => log({ where: i, got: await a2.widgets.where(name).catch(() => null) }), 600);
     alignSent[name] = { ...alignSent[name], rect: w.rect, marks: cardMarks };
     await placeOpen(name, w.at, w.size);
     a2.widgets.send(name, alignSent[name]).catch(() => {});
@@ -482,6 +491,7 @@ function vanish(name, still) {
 a2.on("widget-message", ({ name, data }) => {
   if (aligning) {
     if (data?.hello && alignSent[name]) a2.widgets.send(name, alignSent[name]).catch(() => {});
+    if (data?.debug || data?.rect) log({ from: name, ...data });
     if (!alignSent[name]?.card || !(data?.rect || data?.marks)) return;
     // A card moved or sized ({ rect }): the fit from it, every card drawn
     // again. Its tick or eye ({ marks }): every card the same.

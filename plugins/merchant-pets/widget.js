@@ -109,5 +109,9 @@ box.addEventListener("mousedown", (e) => {
 });
 document.addEventListener("contextmenu", (e) => e.preventDefault());
 addEventListener("resize", fit);
+// DEBUG (temporary): the window as the page sees it.
+const tell = (why) => rect && a2.widget.post({ debug: { why, iw: innerWidth, ih: innerHeight, sx: screenX, sy: screenY, rect: rect.map(Math.round) } }).catch(() => {});
+addEventListener("resize", () => tell("resize"));
+setInterval(() => tell("tick"), 2000);
 a2.ready();
 a2.widget.post({ hello: true }).catch(() => {});
