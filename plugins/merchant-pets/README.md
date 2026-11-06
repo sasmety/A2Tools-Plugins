@@ -14,7 +14,7 @@ Names come from the game's own texts, in the meter's language (all ten). Turkish
 
 ## Where the labels go
 
-The game draws its shop as one, at a size set by the window's shorter side, centred, so the labels are placed from a measured 1920×1080 shop, scaled to the game's window: at any size, with no setup. If they are off, Settings → **Align** puts the cards out as blue boxes over the open shop: one moved, or sized from an edge or corner, takes every card with it (its yellow tick and eye stay put on screen; moved and sized in one card, they go for all). That fit is kept in the 1920×1080 shop's terms, so it holds at every size. The shop's two close buttons (as red boxes) and the note are dragged into place too, kept for the window's aspect ratio (16:9, 21:9, …). **Save** keeps it all; **Reset to estimate** goes back. Each label sits under its card, or on it at its bottom, middle or top (Settings → **Label**).
+The game draws its shop at a size set by the window's shorter side, centred, so the labels are placed from a measured 1920×1080 shop, scaled to the game's window. Settings → **Align** puts every label, the shop's two close buttons (as red boxes) and the note out to be dragged into place over the open shop; **Save** keeps that layout for the window's aspect ratio (16:9, 21:9, …), each ratio its own. **Reset to estimate** goes back.
 
 ## When the labels go
 
@@ -23,7 +23,7 @@ The game sends nothing when the shop closes. The labels go on:
 - **Esc**, or a left click on the shop's X or Exit button (meter 2.0.89 or newer, `events:input`: while the labels show, the plugin marks parts of the game's window as zones, and hears only "Esc" or which zone a click was in, never where the mouse is);
 - a click on a label, the Skins tab, a skill of yours, a soul for a pet that isn't on the list (buying one keeps them, with its new count), talking to an NPC, a new map, or 3 minutes after the last list.
 
-A click on a card opens the game's purchase window over the labels, and one on its eye a preview page (it closes with Esc or its X, back to the shop): they step aside until it closes (Esc, its Cancel or X, or a purchase, which brings them back with the new count), and the shop stays open. With meter 2.0.89 or newer.
+A click on a card opens the game's purchase window over the labels: they step aside until it closes (Esc, its Cancel or X, or a purchase, which brings them back with the new count), and the shop stays open. With meter 2.0.89 or newer.
 
 On an older meter all of these but Esc and the buttons still work, and the window says which meter is needed. The game's window position and size (the `game` event's `area`) also come with 2.0.89; before it, a 1920×1080 game at the top left is assumed.
 
@@ -41,9 +41,9 @@ The shop's item ids map to pet ids by name (the ids and English item names from 
 
 ## Permissions
 
-- `storage`: your pets' counts per server, your layouts, the label position, the language and the note setting.
+- `storage`: your pets' counts per server, your layouts, the language and the note setting.
 - `events:character`: which server's counts to use.
 - `window`, `widgets`: the labels, the align boxes and the note are the plugin's small windows.
-- `events:input`: Esc, and clicks on the shop's X and Exit, its cards (the tick at the top of one does nothing here) and its purchase window's buttons, as above.
+- `events:input`: Esc, and clicks on the shop's X and Exit, its cards and its purchase window's buttons, as above.
 
 Nothing leaves your computer.

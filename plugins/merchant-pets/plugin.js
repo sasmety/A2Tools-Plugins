@@ -17,32 +17,14 @@ const DUNGEONS = new Set(["Fire Temple", "Krao Cave", "Draupnir"]); // regions, 
 const LABEL = { width: 148, height: 40 }; // fits "105/105 IMPORTANT"
 // Where things go is a layout per aspect ratio of the game's window, that the
 // player aligns (Align). Until then it is guessed from the shop as it stands
-// in a 1920x1080 game (measured 2026-11-05): each card's middle and the bottom
-// of its sides, just under the price; the cards keep to the middle of the
-// screen. A card is CARD wide and tall, its sides `body` of that, the point
-// at its bottom the rest.
+// in a 1920x1080 game (measured 2026-11-05): each card's middle and its
+// label's top, just under the price; the cards keep to the middle of the screen.
 const REF = { width: 1920, height: 1080 };
-const CARD = { width: 160, height: 244, body: 222 };
-// What a click does where on a card (left, top, right, bottom as fractions
-// of it, measured 2026-11-06): the tick at its top marks it, the eye opens a
-// preview page (MARKS: the player can move and size them, Align, the same on
-// every card); the rest, its body and the point, its purchase window.
-const MARKS = { tick: [65 / 160, 0, 95 / 160, 21 / 244], preview: [18 / 160, 81 / 244, 49 / 160, 108 / 244] };
-const BODY = [[0, 0, 1, 222 / 244], [0.25, 222 / 244, 0.75, 236 / 244]];
 const CARDS = [[383, 487], [614, 539], [844, 558], [1074.5, 558], [1305, 539], [1535, 487],
   [428, 776], [658, 817], [1260.5, 817], [1491, 776]];
 // The shop's own close buttons, X and Exit (left, top, right, bottom), and the
 // side of the screen each keeps to.
 const CLOSE = [{ box: [1840, 0, 1920, 80], side: "right" }, { box: [130, 15, 335, 60], side: "left" }];
-// The player's fit of the measured cards (Align): how far every card's left,
-// top, right and bottom edge goes, in the 1920x1080 shop's px (a card moved:
-// all four alike). The cards keep their measured places to each other, and
-// the game scales the shop as one, so a fit made at one size holds at every size.
-const FIT0 = { l: 0, t: 0, r: 0, b: 0 };
-let fit = FIT0;
-let cardMarks = MARKS; // the player's tick and eye (Align), on every card
-// Card `i` in the 1920x1080 shop, fitted: left, top, right, bottom.
-const cardRef = (i) => [CARDS[i][0] - CARD.width / 2 + fit.l, CARDS[i][1] - CARD.body + fit.t, CARDS[i][0] + CARD.width / 2 + fit.r, CARDS[i][1] + CARD.height - CARD.body + fit.b];
 // The list changes every hour, on the hour: with the shop shut, a note at the
 // top of the screen says so (a click on it, or 20 s, takes it away), while you
 // play, or always if the player wants (Settings). The interval is learned
@@ -71,64 +53,12 @@ let every = HOUR; // how often the list changes
 // if it ships later.
 const METER = "2.0.89";
 const canWatch = () => typeof a2.watchInput === "function";
-let watching = null; // the zones asked for, as sent
-let zoneWhat = []; // what each of them is
-let few = false; // the meter takes 16 zones at most
+let watching = null; // the X and Exit zones asked for, as sent
 let unsaved = false; // the last Save could not see where the boxes were
 let noteClosed = true; // the refresh note while the game is closed too (Settings)
 let layouts = {}; // aspect ratio ("1.78") -> the player's layout (see `guess`)
 let aligning = false; // the boxes are out to be dragged into place
 const alignSent = {}; // what each widget shows while aligning
-// While aligning, each card's box is drawn in a window of its own: the box
-// and MARGIN round it (a widget is 800 px at most), kept in the game's area.
-// The plugin puts every window where it works out (it never asks where one
-// is: KWin may not have done moving it). A box moved or sized in its window
-// changes the fit, and every card is drawn again from it.
-const MARGIN = 120;
-let alignWork = Promise.resolve(); // the boxes' changes, in turn
-let alignWin = []; // each card's window: its top left, in screen px
-let fitWas = { fit: FIT0, marks: MARKS }; // to go back to on Cancel
-function cardWindow(a, [x0, y0, x1, y1]) {
-  const dpr = devicePixelRatio, m = MARGIN * dpr;
-  const b = { x: a.x + x0 * a.width, y: a.y + y0 * a.height, w: (x1 - x0) * a.width, h: (y1 - y0) * a.height };
-  const wx0 = Math.round(Math.max(a.x, b.x - m)), wy0 = Math.round(Math.max(a.y, b.y - m));
-  // at least the box's size, if it is off the area
-  const wx1 = Math.max(wx0 + b.w, Math.min(a.x + a.width, b.x + b.w + m)), wy1 = Math.max(wy0 + b.h, Math.min(a.y + a.height, b.y + b.h + m));
-  return {
-    at: { x: wx0, y: wy0 },
-    size: { width: Math.round((wx1 - wx0) / dpr), height: Math.round((wy1 - wy0) / dpr) },
-    rect: [(b.x - wx0) / dpr, (b.y - wy0) / dpr, b.w / dpr, b.h / dpr],
-  };
-}
-// DEBUG (temporary): what align asks of each card window, and what it got.
-const dbg = [];
-function log(e) {
-  dbg.push({ t: Date.now() % 1e6, ...e });
-  if (dbg.length > 400) dbg.shift();
-  a2.storage.set("debug", dbg).catch(() => {});
-}
-async function drawCards() {
-  const a = gameArea(), l = layoutFor(a);
-  await Promise.all(l.cards.map(async (c, i) => {
-    const name = `card-${i}`, w = cardWindow(a, c);
-    alignWin[i] = w.at;
-    log({ draw: i, at: w.at, size: w.size, rect: w.rect.map(Math.round) });
-    setTimeout(async () => log({ where: i, got: await a2.widgets.where(name).catch(() => null) }), 600);
-    alignSent[name] = { ...alignSent[name], rect: w.rect, marks: cardMarks };
-    await placeOpen(name, w.at, w.size);
-    a2.widgets.send(name, alignSent[name]).catch(() => {});
-  }));
-}
-// Card `i`'s box now at `r` in its window: its edges' moves, for every card.
-function refit(i, r) {
-  const a = gameArea(), dpr = devicePixelRatio, s = Math.min(a.width / REF.width, a.height / REF.height);
-  const ref = (X, Y) => [REF.width / 2 + (X - a.x - a.width / 2) / s, REF.height / 2 + (Y - a.y - a.height / 2) / s];
-  const w = alignWin[i];
-  const [X0, Y0] = ref(w.x + r[0] * dpr, w.y + r[1] * dpr);
-  const [X1, Y1] = ref(w.x + (r[0] + r[2]) * dpr, w.y + (r[1] + r[3]) * dpr);
-  const [x0, y0, x1, y1] = cardRef(i);
-  fit = { l: fit.l + X0 - x0, t: fit.t + Y0 - y0, r: fit.r + X1 - x1, b: fit.b + Y1 - y1 };
-}
 let noteOn = false;
 let noteTimer = 0;
 let refreshTimer = 0;
@@ -269,52 +199,43 @@ a2.on("decoded:own-position", (d) => {
 // Talking to an NPC (the merchant too: its list comes right after and shows them again).
 a2.on("decoded:npc-talk", () => hideLabels());
 a2.on("decoded:zone", () => hideLabels());
-// A click on a card opens the shop's purchase window over the labels, or its
-// eye a preview page: they step aside ("buy", "preview") until it closes, the
-// shop still open. The window: Esc, its Cancel or X, or the pet's souls of a
-// purchase. The page: Esc, or its X (where the shop's is).
+// A click on a card opens the shop's purchase window over the labels: they
+// step aside until it closes (Esc, its Cancel or X, or the pet's souls of a
+// purchase), the shop still open.
 let buying = false;
 function setBuying(on) {
   if (buying === on) return;
   buying = on;
   refresh();
 }
-// Esc, or a click in a zone (what it is: `zoneWhat`), while the labels show.
+// The zones the meter is asked to watch, always all of them so each keeps
+// its index: the shop's X and Exit, each card, then the purchase window's
+// Cancel, X and Purchase.
+const Z = { cards: 2, cancel: 2 + SLOTS, purchase: 4 + SLOTS };
+// Esc, or a click in a zone, while the labels show.
 a2.on("input", (e) => {
   if (!shown || aligning) return;
-  const what = e.key === "Escape" ? "esc" : zoneWhat[e.zone];
-  if (buying === "preview") {
-    if (what === "esc" || what === "close") setBuying(false);
-  } else if (buying) {
-    if (what === "esc" || what === "cancel") setBuying(false);
+  const z = e.zone;
+  if (buying) {
+    if (e.key === "Escape" || z === Z.cancel || z === Z.cancel + 1) setBuying(false);
     // Bought: a pet's souls come at once (and bring the labels back); a mount
     // or a look brings none.
-    if (what === "purchase") setTimeout(() => setBuying(false), 600);
-  } else if (what === "esc" || what === "close") hideLabels();
-  else if (what === "card") setBuying("buy");
-  else if (what === "preview") setBuying("preview");
+    if (z === Z.purchase) setTimeout(() => setBuying(false), 600);
+  } else if (e.key === "Escape" || z === 0 || z === 1) hideLabels();
+  else if (z >= Z.cards && z < Z.cards + SLOTS) setBuying(true);
 });
 // The purchase window, measured in a 1920x1080 game (2026-11-06): in the
 // middle of the screen, its Cancel, X and Purchase buttons (left, top, right,
-// bottom).
+// bottom). And a card: so wide, and so tall above its label's top.
 const PURCHASE = [[765, 706, 957, 746], [1284, 233, 1324, 273], [963, 706, 1155, 746]];
-// The zones to watch, each with what it is: the shop's X and Exit, the cards'
-// parts, the purchase window's Cancel, X and Purchase. `few`: a meter that
-// takes 16 at most gets each card whole.
-function zonesFor(a, few) {
+const CARD = { width: 160, height: 222 };
+function zonesFor(a) {
   const l = layoutFor(a);
+  const s = Math.min(a.width / REF.width, a.height / REF.height);
   const f = (p) => [(p.x - a.x) / a.width, (p.y - a.y) / a.height];
-  const part = ([x0, y0, x1, y1], [px0, py0, px1, py1]) => {
-    const w = x1 - x0, h = y1 - y0;
-    return [x0 + px0 * w, y0 + py0 * h, x0 + px1 * w, y0 + py1 * h];
-  };
-  const m = l.marks || MARKS;
-  const parts = few ? [["card", [0, 0, 1, 1]]] : [["tick", m.tick], ["preview", m.preview], ...BODY.map((b) => ["card", b])];
-  return [
-    ...l.close.map((r) => ["close", r]),
-    ...parts.flatMap(([what, p]) => l.cards.map((c) => [what, part(c, p)])),
-    ...PURCHASE.map(([x0, y0, x1, y1], k) => [k < 2 ? "cancel" : "purchase", [...f(at(a, x0, y0)), ...f(at(a, x1, y1))]]),
-  ];
+  const w = (CARD.width * s) / 2 / a.width;
+  const cards = l.cards.map(([x, y]) => [x - w, y - (CARD.height * s) / a.height, x + w, y]);
+  return [...l.close, ...cards, ...PURCHASE.map(([x0, y0, x1, y1]) => [...f(at(a, x0, y0)), ...f(at(a, x1, y1))])];
 }
 // The meter watches only while the labels show (zones of the game's window,
 // kept in it so the meter takes them; one off the window shrinks to its corner).
@@ -325,18 +246,11 @@ function watchClose() {
     const z = { x: inside(x0), y: inside(y0), width: inside(x1) - inside(x0), height: inside(y1) - inside(y0) };
     return z.width > 0 && z.height > 0 ? z : { x: 0, y: 0, width: 1e-6, height: 1e-6 };
   };
-  const list = shown && !aligning ? zonesFor(gameArea(), few) : null;
-  const zones = list && list.map(([, r]) => zone(r));
+  const zones = shown && !aligning ? zonesFor(gameArea()).map(zone) : null;
   const key = JSON.stringify(zones);
   if (key === watching) return;
   watching = key;
-  zoneWhat = list ? list.map(([what]) => what) : [];
-  a2.watchInput(zones).catch(() => {
-    if (!zones || zones.length <= 16 || few) return;
-    few = true; // a meter that takes fewer
-    watching = null;
-    watchClose();
-  });
+  a2.watchInput(zones).catch(() => {});
 }
 
 // A point of the 1920x1080 shop in game area `a`. The game scales its
@@ -350,15 +264,12 @@ function at(a, rx, ry, side, top) {
 }
 const gameArea = () => area || { x: 0, y: 0, ...REF };
 // A layout: where things stand in the game's area, as fractions of its width
-// and height. cards and close (X, Exit): each one's left, top, right, bottom;
-// note: the note's middle and top.
+// and height. cards: each label's middle and top; close: X's and Exit's left,
+// top, right, bottom; note: the note's middle and top.
 function guess(a) {
   const f = (p) => [(p.x - a.x) / a.width, (p.y - a.y) / a.height];
   return {
-    cards: CARDS.map((_, i) => {
-      const [x0, y0, x1, y1] = cardRef(i);
-      return [...f(at(a, x0, y0)), ...f(at(a, x1, y1))];
-    }),
+    cards: CARDS.map(([x, y]) => f(at(a, x, y))),
     close: CLOSE.map(({ box: [l, t, r, b], side }) => [...f(at(a, l, t, side, true)), ...f(at(a, r, b, side, true))]),
     note: f(at(a, REF.width / 2, NOTE.top, "middle", true)),
   };
@@ -366,23 +277,7 @@ function guess(a) {
 const ratioKey = (a) => (a.width / a.height).toFixed(2);
 const RATIO_NAMES = { "1.78": "16:9", "1.60": "16:10", "2.33": "21:9", "2.37": "21:9", "2.39": "21:9", "3.56": "32:9", "1.33": "4:3", "1.25": "5:4" };
 const ratioName = (k) => RATIO_NAMES[k] || k;
-// The cards from the fit; X, Exit and the note as aligned for this ratio.
-function layoutFor(a) {
-  const g = guess(a), mine = layouts[ratioKey(a)];
-  return { ...g, close: mine?.close || g.close, note: mine?.note || g.note, marks: cardMarks };
-}
-// Where a card's label goes (Settings): under the card's sides (on its point),
-// or on it at its bottom, middle or top; its top middle in screen pixels, for
-// zoom `z`.
-const LABEL_AT = ["under", "bottom", "middle", "top"];
-let labelAt = "under";
-function labelOn(a, [x0, y0, x1, y1], z) {
-  const top = a.y + y0 * a.height;
-  const bottom = top + ((y1 - y0) * a.height * CARD.body) / CARD.height;
-  const h = LABEL.height * z * devicePixelRatio;
-  const y = { under: bottom, bottom: bottom - h, middle: (top + bottom - h) / 2, top }[labelAt];
-  return centred({ x: a.x + ((x0 + x1) / 2) * a.width, y }, LABEL.width * z);
-}
+const layoutFor = (a) => layouts[ratioKey(a)] || guess(a);
 // A point of a layout on screen, in game area `a`.
 const onScreen = (a, [fx, fy]) => ({ x: a.x + fx * a.width, y: a.y + fy * a.height });
 // How big labels and the note are drawn: as big as the game draws its
@@ -436,14 +331,6 @@ function refresh() {
   });
   return pass;
 }
-// A widget opened at `size`, its top left at `at`: placed before (KWin
-// sometimes opens one mid-screen, and the meter would keep it there) and after
-// (KWin moves one that grows or shrinks, as a card's box does from a label).
-async function placeOpen(name, at, size) {
-  await a2.widgets.place(name, at).catch(() => {});
-  await a2.widgets.open(name, size).catch(() => {});
-  await a2.widgets.place(name, at).catch(() => {});
-}
 async function putUp() {
   watchClose();
   if (aligning) return render();
@@ -456,8 +343,10 @@ async function putUp() {
     const was = sent[i];
     sent[i] = want;
     if (!want) return vanish(name, () => !sent[i]);
-    if (was) await a2.widgets.open(name, sized(LABEL, want.zoom)).catch(() => {});
-    else await placeOpen(name, labelOn(a, layoutFor(a).cards[i], want.zoom), sized(LABEL, want.zoom));
+    // Placed before each open: KWin sometimes opens a widget mid-screen,
+    // and the meter would keep it there.
+    if (!was) await a2.widgets.place(name, centred(onScreen(a, layoutFor(a).cards[i]), LABEL.width * want.zoom)).catch(() => {});
+    await a2.widgets.open(name, sized(LABEL, want.zoom)).catch(() => {});
     a2.widgets.send(name, want).catch(() => {});
   }));
   render();
@@ -473,7 +362,8 @@ async function makeLabels() {
   await Promise.all(Array.from({ length: SLOTS }, async (_, i) => {
     const name = `card-${i}`;
     if (sent[i]) return;
-    await placeOpen(name, labelOn(a, layoutFor(a).cards[i], z), sized(LABEL, z));
+    await a2.widgets.place(name, centred(onScreen(a, layoutFor(a).cards[i]), LABEL.width * z)).catch(() => {});
+    await a2.widgets.open(name, sized(LABEL, z)).catch(() => {});
     if (!sent[i] && !aligning) await a2.widgets.close(name).catch(() => {});
   }));
 }
@@ -491,23 +381,6 @@ function vanish(name, still) {
 a2.on("widget-message", ({ name, data }) => {
   if (aligning) {
     if (data?.hello && alignSent[name]) a2.widgets.send(name, alignSent[name]).catch(() => {});
-    if (data?.debug || data?.rect) log({ from: name, ...data });
-    if (!alignSent[name]?.card || !(data?.rect || data?.marks)) return;
-    // A card moved or sized ({ rect }): the fit from it, every card drawn
-    // again. Its tick or eye ({ marks }): every card the same.
-    const i = Number(name.split("-")[1]);
-    alignWork = alignWork.then(async () => {
-      if (data.marks) cardMarks = data.marks;
-      if (data.rect) {
-        refit(i, data.rect);
-        return drawCards();
-      }
-      for (let j = 0; j < SLOTS; j++) {
-        const n = `card-${j}`;
-        alignSent[n] = { ...alignSent[n], marks: cardMarks };
-        if (j !== i) a2.widgets.send(n, alignSent[n]).catch(() => {});
-      }
-    });
     return;
   }
   if (name === NOTE.name) {
@@ -585,26 +458,24 @@ async function startAlign() {
   const z = zoomFor(a);
   const show = async (name, at, size, data) => {
     alignSent[name] = data;
-    await placeOpen(name, at, size);
+    await a2.widgets.place(name, at).catch(() => {});
+    await a2.widgets.open(name, size).catch(() => {});
     a2.widgets.send(name, data).catch(() => {});
   };
-  // A box as big as what it stands for: each card (blue), X and Exit (red).
-  const box = async (name, [x0, y0, x1, y1], data) => {
+  for (let i = 0; i < SLOTS; i++) {
+    const data = { text: `${text().card} ${i + 1}`, sub: text().drag, align: true, zoom: z };
+    await show(`card-${i}`, centred(onScreen(a, l.cards[i]), LABEL.width * z), sized(LABEL, z), data);
+  }
+  for (const [k, [x0, y0, x1, y1]] of l.close.entries()) {
     const from = onScreen(a, [x0, y0]);
     const size = { width: Math.round(((x1 - x0) * a.width) / devicePixelRatio), height: Math.round(((y1 - y0) * a.height) / devicePixelRatio) };
-    await show(name, { x: Math.round(from.x), y: Math.round(from.y) }, size, { ...data, exit: true, align: true });
-  };
-  fitWas = { fit, marks: cardMarks };
-  for (let i = 0; i < SLOTS; i++) alignSent[`card-${i}`] = { text: `${text().card} ${i + 1}`, sub: text().drag, card: true, exit: true, align: true };
-  alignWork = drawCards();
-  await alignWork;
-  for (const [k, rect] of l.close.entries()) await box(ALIGN[SLOTS + k], rect, { text: k ? "Exit" : "X" });
+    await show(ALIGN[SLOTS + k], { x: Math.round(from.x), y: Math.round(from.y) }, size, { text: k ? "Exit" : "X", exit: true, align: true });
+  }
   await show(NOTE.name, centred(onScreen(a, l.note), NOTE.width * z), sized(NOTE, z), { ...noteData(z), align: true });
   render();
 }
 async function endAlign(keep) {
   if (!aligning) return;
-  await alignWork;
   const a = gameArea();
   const rects = keep ? await Promise.all(ALIGN.map((name) => a2.widgets.where(name).catch(() => null))) : [];
   // A meter that cannot see where its windows are (before 2.0.89 on KDE
@@ -614,13 +485,15 @@ async function endAlign(keep) {
   if (keep && !unsaved) {
     const was = layoutFor(a);
     const f = (x, y) => [(x - a.x) / a.width, (y - a.y) / a.height];
-    const rect = (r, was) => (r ? [...f(r.x, r.y), ...f(r.x + r.width, r.y + r.height)] : was);
-    const close = was.close.map((c, k) => rect(rects[SLOTS + k], c));
+    const cards = was.cards.map((c, i) => (rects[i] ? f(rects[i].x + rects[i].width / 2, rects[i].y) : c));
+    const close = was.close.map((box, k) => {
+      const r = rects[SLOTS + k];
+      return r ? [...f(r.x, r.y), ...f(r.x + r.width, r.y + r.height)] : box;
+    });
     const n = rects[SLOTS + 2];
-    layouts[ratioKey(a)] = { v: 2, close, note: n ? f(n.x + n.width / 2, n.y) : was.note, size: `${a.width}×${a.height}` };
+    layouts[ratioKey(a)] = { cards, close, note: n ? f(n.x + n.width / 2, n.y) : was.note, size: `${a.width}×${a.height}` };
     await a2.storage.set("layouts", layouts).catch(() => {});
-    await a2.storage.set("fit", { ...fit, marks: cardMarks }).catch(() => {});
-  } else ({ fit, marks: cardMarks } = fitWas); // as it was
+  }
   for (const name of ALIGN) await a2.widgets.close(name).catch(() => {});
   aligning = false;
   sent.fill(null);
@@ -629,9 +502,6 @@ async function endAlign(keep) {
 async function forget(k) {
   delete layouts[k];
   await a2.storage.set("layouts", layouts).catch(() => {});
-  fit = FIT0; // the cards' fit, the same at every size, goes too
-  cardMarks = MARKS;
-  await a2.storage.set("fit", null).catch(() => {});
   watchClose(); // the estimate's X and Exit again
   render();
 }
@@ -714,28 +584,14 @@ $(".lang select").addEventListener("change", (e) => {
   a2.storage.set("lang", pickedLang).catch(() => {});
   setLang();
 });
-$(".label-at select").addEventListener("change", (e) => {
-  labelAt = LABEL_AT.includes(e.target.value) ? e.target.value : "under";
-  a2.storage.set("labelAt", labelAt).catch(() => {});
-  sent.fill(null); // placed again
-  refresh();
-});
 setInterval(render, 30_000);
 
 (async () => {
   key = (await a2.storage.get("last").catch(() => null)) || null;
   if (key) await load(key);
   layouts = (await a2.storage.get("layouts").catch(() => null)) || {};
-  // Layouts from before the cards were whole (v 2) go; the cards come from the fit.
-  for (const [k, l] of Object.entries(layouts)) if (l.v !== 2) delete layouts[k];
-  const saved = await a2.storage.get("fit").catch(() => null);
-  const num = (v, lo, hi) => typeof v === "number" && v >= lo && v <= hi;
-  if (saved && ["l", "t", "r", "b"].every((k) => num(saved[k], -500, 500))) fit = { l: saved.l, t: saved.t, r: saved.r, b: saved.b };
-  const ok = (m) => Array.isArray(m) && m.length === 4 && m.every((v) => num(v, -1, 2));
-  if (ok(saved?.marks?.tick) && ok(saved?.marks?.preview)) cardMarks = { tick: saved.marks.tick, preview: saved.marks.preview };
-  const savedAt = await a2.storage.get("labelAt").catch(() => null);
-  labelAt = LABEL_AT.includes(savedAt) ? savedAt : "under";
-  $(".label-at select").value = labelAt;
+  // Only layouts of ten labels (each its middle and top) and the two close boxes.
+  for (const [k, l] of Object.entries(layouts)) if (l?.cards?.length !== SLOTS || l.cards.some((c) => c.length !== 2) || l.close?.length !== 2) delete layouts[k];
   const savedLang = await a2.storage.get("lang").catch(() => null);
   pickedLang = savedLang === "tr" ? "tr" : "";
   $(".lang select").value = pickedLang;
