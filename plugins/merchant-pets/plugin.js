@@ -34,15 +34,15 @@ const CARDS = [[383, 487], [614, 539], [844, 558], [1074.5, 558], [1305, 539], [
 // The shop's own close buttons, X and Exit (left, top, right, bottom), and the
 // side of the screen each keeps to.
 const CLOSE = [{ box: [1840, 0, 1920, 80], side: "right" }, { box: [130, 15, 335, 60], side: "left" }];
-// The player's fit of the measured cards (Align): the grid of them scaled by
-// k about the 1920x1080 shop's middle and moved by t, in its px. The game
-// scales the shop as one, so a fit made at one size holds at every size.
-const FIT0 = { kx: 1, ky: 1, tx: 0, ty: 0 };
+// The player's fit of the measured cards (Align): how far every card's left,
+// top, right and bottom edge goes, in the 1920x1080 shop's px (a card moved:
+// all four alike). The cards keep their measured places to each other, and
+// the game scales the shop as one, so a fit made at one size holds at every size.
+const FIT0 = { l: 0, t: 0, r: 0, b: 0 };
 let fit = FIT0;
 let cardMarks = MARKS; // the player's tick and eye (Align), on every card
-const fitted = (x, y) => [REF.width / 2 + (x - REF.width / 2) * fit.kx + fit.tx, REF.height / 2 + (y - REF.height / 2) * fit.ky + fit.ty];
-// Card `i` in the 1920x1080 shop, unfitted: left, top, right, bottom.
-const cardRef = (i) => [CARDS[i][0] - CARD.width / 2, CARDS[i][1] - CARD.body, CARDS[i][0] + CARD.width / 2, CARDS[i][1] + CARD.height - CARD.body];
+// Card `i` in the 1920x1080 shop, fitted: left, top, right, bottom.
+const cardRef = (i) => [CARDS[i][0] - CARD.width / 2 + fit.l, CARDS[i][1] - CARD.body + fit.t, CARDS[i][0] + CARD.width / 2 + fit.r, CARDS[i][1] + CARD.height - CARD.body + fit.b];
 // The list changes every hour, on the hour: with the shop shut, a note at the
 // top of the screen says so (a click on it, or 20 s, takes it away), while you
 // play, or always if the player wants (Settings). The interval is learned
@@ -92,7 +92,8 @@ function cardWindow(a, [x0, y0, x1, y1]) {
   const dpr = devicePixelRatio, m = MARGIN * dpr;
   const b = { x: a.x + x0 * a.width, y: a.y + y0 * a.height, w: (x1 - x0) * a.width, h: (y1 - y0) * a.height };
   const wx0 = Math.round(Math.max(a.x, b.x - m)), wy0 = Math.round(Math.max(a.y, b.y - m));
-  const wx1 = Math.min(a.x + a.width, b.x + b.w + m), wy1 = Math.min(a.y + a.height, b.y + b.h + m);
+  // at least the box's size, if it is off the area
+  const wx1 = Math.max(wx0 + b.w, Math.min(a.x + a.width, b.x + b.w + m)), wy1 = Math.max(wy0 + b.h, Math.min(a.y + a.height, b.y + b.h + m));
   return {
     at: { x: wx0, y: wy0 },
     size: { width: Math.round((wx1 - wx0) / dpr), height: Math.round((wy1 - wy0) / dpr) },
@@ -118,7 +119,7 @@ async function drawCards() {
     a2.widgets.send(name, alignSent[name]).catch(() => {});
   }));
 }
-// Card `i`'s box now at `r` in its window: the fit that puts it there.
+// Card `i`'s box now at `r` in its window: its edges' moves, for every card.
 function refit(i, r) {
   const a = gameArea(), dpr = devicePixelRatio, s = Math.min(a.width / REF.width, a.height / REF.height);
   const ref = (X, Y) => [REF.width / 2 + (X - a.x - a.width / 2) / s, REF.height / 2 + (Y - a.y - a.height / 2) / s];
@@ -126,8 +127,7 @@ function refit(i, r) {
   const [X0, Y0] = ref(w.x + r[0] * dpr, w.y + r[1] * dpr);
   const [X1, Y1] = ref(w.x + (r[0] + r[2]) * dpr, w.y + (r[1] + r[3]) * dpr);
   const [x0, y0, x1, y1] = cardRef(i);
-  const kx = (X1 - X0) / (x1 - x0), ky = (Y1 - Y0) / (y1 - y0);
-  fit = { kx, ky, tx: X0 - REF.width / 2 - (x0 - REF.width / 2) * kx, ty: Y0 - REF.height / 2 - (y0 - REF.height / 2) * ky };
+  fit = { l: fit.l + X0 - x0, t: fit.t + Y0 - y0, r: fit.r + X1 - x1, b: fit.b + Y1 - y1 };
 }
 let noteOn = false;
 let noteTimer = 0;
@@ -357,7 +357,7 @@ function guess(a) {
   return {
     cards: CARDS.map((_, i) => {
       const [x0, y0, x1, y1] = cardRef(i);
-      return [...f(at(a, ...fitted(x0, y0))), ...f(at(a, ...fitted(x1, y1)))];
+      return [...f(at(a, x0, y0)), ...f(at(a, x1, y1))];
     }),
     close: CLOSE.map(({ box: [l, t, r, b], side }) => [...f(at(a, l, t, side, true)), ...f(at(a, r, b, side, true))]),
     note: f(at(a, REF.width / 2, NOTE.top, "middle", true)),
@@ -730,7 +730,7 @@ setInterval(render, 30_000);
   for (const [k, l] of Object.entries(layouts)) if (l.v !== 2) delete layouts[k];
   const saved = await a2.storage.get("fit").catch(() => null);
   const num = (v, lo, hi) => typeof v === "number" && v >= lo && v <= hi;
-  if (saved && num(saved.kx, 0.5, 2) && num(saved.ky, 0.5, 2) && num(saved.tx, -500, 500) && num(saved.ty, -500, 500)) fit = { kx: saved.kx, ky: saved.ky, tx: saved.tx, ty: saved.ty };
+  if (saved && ["l", "t", "r", "b"].every((k) => num(saved[k], -500, 500))) fit = { l: saved.l, t: saved.t, r: saved.r, b: saved.b };
   const ok = (m) => Array.isArray(m) && m.length === 4 && m.every((v) => num(v, -1, 2));
   if (ok(saved?.marks?.tick) && ok(saved?.marks?.preview)) cardMarks = { tick: saved.marks.tick, preview: saved.marks.preview };
   const savedAt = await a2.storage.get("labelAt").catch(() => null);
